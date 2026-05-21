@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { fetchReminders, markReminderTaken } from './lib/api'
 import type { Reminder, ReminderStatus } from './lib/types'
-import { CalendarDays, Check, Clock } from 'lucide-react'
+import { CalendarDays, Check, Clock, AlertTriangle } from 'lucide-react'
 
 const STATUS_CLASSES: Record<ReminderStatus, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -40,34 +40,58 @@ function formatTime(iso: string) {
   return toUtcDate(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
+function isOverdue(r: Reminder): boolean {
+  return r.status === 'completed' && !r.taken
+}
+
+function canMarkTaken(scheduledAt: string): boolean {
+  return toUtcDate(scheduledAt).getTime() - Date.now() < 2 * 60 * 60 * 1000
+}
+
 function ReminderCard({ reminder, onTaken }: { reminder: Reminder; onTaken: (id: string) => void }) {
+  const overdue = isOverdue(reminder)
   return (
-    <div className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col gap-2 transition-colors ${reminder.taken ? 'border-green-100 opacity-75' : 'border-blue-50'}`}>
+    <div className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col gap-2 transition-colors ${
+      reminder.taken ? 'border-green-100 opacity-75' : overdue ? 'border-amber-200' : 'border-blue-50'
+    }`}>
       <div className="flex items-start justify-between gap-2">
-        <span className={`font-semibold text-sm leading-tight ${reminder.taken ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-          {reminder.medication}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {overdue && <AlertTriangle size={13} className="text-amber-400 shrink-0" />}
+          <span className={`font-semibold text-sm leading-tight ${reminder.taken ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+            {reminder.medication}
+          </span>
+        </div>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_CLASSES[reminder.status]}`}>
           {STATUS_LABELS[reminder.status]}
         </span>
       </div>
+      {overdue && (
+        <p className="text-xs text-amber-500 font-medium">Hora pasada — ¿ya lo tomaste?</p>
+      )}
       <p className="text-xs text-gray-400 line-clamp-2">{reminder.message}</p>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs text-gray-400">
           <Clock size={12} />
           <span>{formatTime(reminder.scheduled_at)}</span>
-          <span className="mx-1">·</span>
-          <span>{reminder.channels.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(', ')}</span>
         </div>
         {reminder.taken ? (
           <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
             <Check size={12} />
             Tomado
           </span>
-        ) : (
+        ) : canMarkTaken(reminder.scheduled_at) ? (
           <button
             onClick={() => onTaken(reminder.reminder_id)}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition-colors"
+            className={`flex items-center gap-1 text-xs transition-colors ${overdue ? 'text-amber-400 hover:text-green-600' : 'text-gray-400 hover:text-green-600'}`}
+          >
+            <Check size={12} />
+            Marcar tomado
+          </button>
+        ) : (
+          <button
+            disabled
+            title="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma."
+            className="flex items-center gap-1 text-xs text-gray-300 cursor-not-allowed"
           >
             <Check size={12} />
             Marcar tomado

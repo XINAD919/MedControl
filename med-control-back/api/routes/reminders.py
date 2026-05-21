@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -81,8 +81,26 @@ async def mark_reminder_taken(
         raise HTTPException(status_code=403, detail="No autorizado")
     try:
         db = get_supabase()
-        now = datetime.utcnow().isoformat()
+        row = await db.table("reminders").select("scheduled_at").eq("reminder_id", reminder_id).eq("user_id", user_id).maybe_single().execute()
+        if not row or not row.data:
+            raise HTTPException(status_code=404, detail="Recordatorio no encontrado")
+
+        raw = str(row.data["scheduled_at"]).replace("Z", "+00:00")
+        scheduled_at = datetime.fromisoformat(raw)
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+
+        if (scheduled_at - now_utc) >= timedelta(hours=2):
+            raise HTTPException(
+                status_code=422,
+                detail="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma.",
+            )
+
+        now = now_utc.isoformat()
         await db.table("reminders").update({"taken": True, "taken_at": now}).eq("reminder_id", reminder_id).eq("user_id", user_id).execute()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"ok": True}

@@ -87,7 +87,9 @@ async def _insert_all_reminders_local(tasks: list[dict]) -> None:
     client = await create_temp_client()
     try:
         session_cache: dict[str, str | None] = {}
-        rows = []
+        reminder_rows = []
+        notification_rows = []
+
         for p in tasks:
             sid_str = p["session_id"]
             if sid_str not in session_cache:
@@ -98,28 +100,38 @@ async def _insert_all_reminders_local(tasks: list[dict]) -> None:
                     session_cache[sid_str] = None
             session_uuid = session_cache[sid_str]
 
+            reminder_rows.append({
+                "reminder_id": p["reminder_id"],
+                "user_id": p["user_id"],
+                "session_id": session_uuid,
+                "medication": p["medication"],
+                "schedule": p["schedule"],
+                "message": p["message"],
+                "notes": p["notes"] or None,
+                "scheduled_at": p["scheduled_at"],
+                "status": "scheduled",
+                "is_recurring": p["is_recurring"],
+                "recurrence_type": p["recurrence_type"] or None,
+                "recurrence_days": json.dumps(p["recurrence_days"]) if p["recurrence_days"] else None,
+                "recurrence_interval": p["recurrence_interval"] or 1,
+                "recurrence_end_date": p["recurrence_end_date"] or None,
+            })
+
             for ch in p["channels"]:
-                rows.append({
+                notification_rows.append({
                     "reminder_id": p["reminder_id"],
                     "user_id": p["user_id"],
-                    "session_id": session_uuid,
-                    "medication": p["medication"],
-                    "schedule": p["schedule"],
-                    "message": p["message"],
-                    "notes": p["notes"] or None,
                     "channel": ch["channel"],
                     "notify_id": ch["notify_id"],
-                    "scheduled_at": p["scheduled_at"],
                     "status": "scheduled",
-                    "is_recurring": p["is_recurring"],
-                    "recurrence_type": p["recurrence_type"] or None,
-                    "recurrence_days": json.dumps(p["recurrence_days"]) if p["recurrence_days"] else None,
-                    "recurrence_interval": p["recurrence_interval"] or 1,
-                    "recurrence_end_date": p["recurrence_end_date"] or None,
                 })
 
-        if rows:
-            await client.table("reminders").upsert(rows, on_conflict="reminder_id,channel").execute()
+        if reminder_rows:
+            await client.table("reminders").upsert(reminder_rows, on_conflict="reminder_id").execute()
+        if notification_rows:
+            await client.table("reminder_notifications").upsert(
+                notification_rows, on_conflict="reminder_id,channel"
+            ).execute()
     finally:
         await client.aclose()
 

@@ -1,5 +1,5 @@
 export type ReminderStatus = 'scheduled' | 'firing' | 'completed' | 'failed' | 'cancelled'
-export type ChannelType = 'telegram' | 'email' | 'discord' | 'webpush' | 'whatsapp'
+export type ChannelType = 'telegram' | 'email' | 'discord' | 'webpush' | 'whatsapp' | 'sms'
 
 export interface Reminder {
   reminder_id: string
@@ -44,3 +44,19 @@ export interface Document {
 }
 
 export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error'
+
+export interface ReminderNotification {
+  id: string
+  reminder_id: string
+  channel: ChannelType
+  notify_id: string
+  status: ReminderStatus
+  fired_at: string | null
+  completed_at: string | null
+  failed_at: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  medication: string | null
+  scheduled_at: string | null
+}

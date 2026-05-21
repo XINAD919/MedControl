@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { fetchChannels, createChannel, deleteChannel, toggleChannelReminders } from '../lib/api'
 import { canWrite } from '../lib/rbac'
 import type { Channel, ChannelType } from '../lib/types'
-import { Send, Mail, Hash, Bell, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X } from 'lucide-react'
+import { Send, Mail, Hash, Bell, Phone, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X } from 'lucide-react'
 import WhatsappIcon from '../components/icons/WhatsappIcon'
 
 const CHANNEL_ICONS: Record<ChannelType, React.ReactNode> = {
@@ -14,6 +14,7 @@ const CHANNEL_ICONS: Record<ChannelType, React.ReactNode> = {
   email: <Mail size={16} />,
   discord: <Hash size={16} />,
   webpush: <Bell size={16} />,
+  sms: <Phone size={16} />,
 }
 
 const CHANNEL_LABELS: Record<ChannelType, string> = {
@@ -22,6 +23,7 @@ const CHANNEL_LABELS: Record<ChannelType, string> = {
   email: 'Correo electrónico',
   discord: 'Discord',
   webpush: 'Web Push',
+  sms: 'SMS',
 }
 
 const NOTIFY_ID_LABELS: Record<ChannelType, string> = {
@@ -30,6 +32,7 @@ const NOTIFY_ID_LABELS: Record<ChannelType, string> = {
   email: 'Dirección de correo',
   discord: 'User ID',
   webpush: '',
+  sms: 'Número de teléfono',
 }
 
 type AddableChannel = 'whatsapp' | 'telegram' | 'email' | 'discord'
