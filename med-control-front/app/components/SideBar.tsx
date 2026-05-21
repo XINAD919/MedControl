@@ -1,7 +1,7 @@
 'use client'
 import Image from 'next/image'
 import NavItem from './NavItem'
-import { LayoutDashboard, CalendarDays, MessageSquare, Users, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, MessageSquare, Users, Settings, LogOut, Bell } from 'lucide-react'
 import { useSession, signOut } from 'next-auth/react'
 
 function SideBar() {
@@ -41,6 +41,7 @@ function SideBar() {
         <NavItem path='/calendar' title='Calendario' icon={<CalendarDays size={18} />} />
         <NavItem path='/chat' title='Chat' icon={<MessageSquare size={18} />} />
         <NavItem path='/family' title='Familia' icon={<Users size={18} />} />
+        <NavItem path='/notifications' title='Notificaciones' icon={<Bell size={18} />} />
         <NavItem path='/settings' title='Configuración' icon={<Settings size={18} />} />
       </nav>
 

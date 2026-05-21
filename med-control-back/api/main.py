@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from api.routes import webhooks, channels, chat, reminders, documents, auth as auth_routes  # noqa: E402
+from api.routes import webhooks, channels, chat, reminders, documents, auth as auth_routes, notifications  # noqa: E402
 from core.supabase_client import init_supabase_client, close_supabase_client
 from core.storage import ensure_bucket_exists
 from core.scheduler import start_scheduler, stop_scheduler
@@ -99,3 +99,4 @@ app.include_router(chat.router)
 app.include_router(reminders.router, prefix="/api", tags=["Reminders"])
 app.include_router(documents.router, prefix="/api", tags=["Documents"])
 app.include_router(auth_routes.router, prefix="/api", tags=["Auth"])
+app.include_router(notifications.router, prefix="/api", tags=["Notifications"])

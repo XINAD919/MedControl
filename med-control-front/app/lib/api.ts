@@ -1,5 +1,5 @@
 import type { Session } from 'next-auth'
-import type { Channel, ChannelType, Document, Reminder } from './types'
+import type { Channel, ChannelType, Document, Reminder, ReminderNotification } from './types'
 import { assertCanWrite } from './rbac'
 
 const BASE_URL = '/api/backend'
@@ -93,6 +93,21 @@ export function toggleChannelReminders(
     `/api/users/${session.user.id}/channels/${channel}/toggle-reminders`,
     session.accessToken,
     { method: 'PATCH' },
+  )
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export function fetchNotifications(
+  session: Session,
+  status?: string,
+): Promise<ReminderNotification[]> {
+  const qs = new URLSearchParams()
+  if (status) qs.set('status', status)
+  const query = qs.toString() ? `?${qs}` : ''
+  return apiFetch<ReminderNotification[]>(
+    `/api/users/${session.user.id}/notifications${query}`,
+    session.accessToken,
   )
 }
 

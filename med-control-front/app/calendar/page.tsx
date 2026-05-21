@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { fetchReminders, markReminderTaken } from '../lib/api'
 import type { Reminder, ReminderStatus } from '../lib/types'
-import { CalendarDays, Check, Clock, Pill } from 'lucide-react'
+import { CalendarDays, Check, Clock, Pill, AlertTriangle } from 'lucide-react'
 
 const STATUS_CLASSES: Record<ReminderStatus, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -22,13 +22,11 @@ const STATUS_LABELS: Record<ReminderStatus, string> = {
   cancelled: 'Cancelado',
 }
 
-type FilterOption = 'all' | 'scheduled' | 'completed' | 'failed'
+type FilterOption = 'all' | 'scheduled'
 
 const FILTERS: { value: FilterOption; label: string }[] = [
-  { value: 'all', label: 'Todos' },
+  { value: 'all',       label: 'Todos' },
   { value: 'scheduled', label: 'Programados' },
-  { value: 'completed', label: 'Completados' },
-  { value: 'failed', label: 'Fallidos' },
 ]
 
 function formatDate(dateStr: string) {
@@ -45,6 +43,10 @@ function toUtcDate(iso: string): Date {
   // Treat bare datetime strings (no timezone suffix) as UTC
   const hasOffset = /([+-]\d{2}:\d{2}|Z)$/.test(iso)
   return new Date(hasOffset ? iso : iso + 'Z')
+}
+
+function canMarkTaken(scheduledAt: string): boolean {
+  return toUtcDate(scheduledAt).getTime() - Date.now() < 2 * 60 * 60 * 1000
 }
 
 function formatTime(iso: string) {
@@ -167,51 +169,63 @@ export default function CalendarPage() {
                 {formatDate(date)}
               </h2>
               <div className="flex flex-col gap-2">
-                {dayReminders.map(r => (
-                  <div
-                    key={r.reminder_id}
-                    className="bg-white rounded-xl p-4 border border-blue-50 shadow-sm flex items-center gap-4"
-                  >
-                    <div className="shrink-0 flex flex-col items-center min-w-[48px]">
-                      <Clock size={12} className="text-gray-300 mb-0.5" />
-                      <span className="text-xs font-mono font-medium text-gray-500">
-                        {formatTime(r.scheduled_at)}
-                      </span>
-                    </div>
-                    <div className="w-px h-10 bg-gray-100 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Pill size={12} className="text-blue-400 shrink-0" />
-                        <span className="text-sm font-semibold text-gray-800 truncate">{r.medication}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-gray-400 truncate">{r.message}</p>
-                        <span className="text-xs text-gray-300 shrink-0">
-                          · {r.channels.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(', ')}
+                {dayReminders.map(r => {
+                  const overdue = r.status === 'completed' && !r.taken
+                  return (
+                    <div
+                      key={r.reminder_id}
+                      className={`bg-white rounded-xl p-4 border shadow-sm flex items-center gap-4 ${overdue ? 'border-amber-200' : 'border-blue-50'}`}
+                    >
+                      <div className="shrink-0 flex flex-col items-center min-w-[48px]">
+                        {overdue
+                          ? <AlertTriangle size={12} className="text-amber-400 mb-0.5" />
+                          : <Clock size={12} className="text-gray-300 mb-0.5" />
+                        }
+                        <span className={`text-xs font-mono font-medium ${overdue ? 'text-amber-500' : 'text-gray-500'}`}>
+                          {formatTime(r.scheduled_at)}
                         </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[r.status]}`}>
-                        {STATUS_LABELS[r.status]}
-                      </span>
-                      {r.taken ? (
-                        <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                          <Check size={12} />
-                          Tomado
+                      <div className="w-px h-10 bg-gray-100 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Pill size={12} className={overdue ? 'text-amber-400 shrink-0' : 'text-blue-400 shrink-0'} />
+                          <span className="text-sm font-semibold text-gray-800 truncate">{r.medication}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 truncate mt-0.5">
+                          {overdue ? 'Hora pasada — ¿ya lo tomaste?' : r.message}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[r.status]}`}>
+                          {STATUS_LABELS[r.status]}
                         </span>
-                      ) : (
-                        <button
-                          onClick={() => handleTaken(r.reminder_id)}
-                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition-colors"
-                        >
-                          <Check size={12} />
-                          Marcar tomado
-                        </button>
-                      )}
+                        {r.taken ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <Check size={12} />
+                            Tomado
+                          </span>
+                        ) : canMarkTaken(r.scheduled_at) ? (
+                          <button
+                            onClick={() => handleTaken(r.reminder_id)}
+                            className={`flex items-center gap-1 text-xs transition-colors ${overdue ? 'text-amber-400 hover:text-green-600' : 'text-gray-400 hover:text-green-600'}`}
+                          >
+                            <Check size={12} />
+                            Marcar tomado
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            title="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma."
+                            className="flex items-center gap-1 text-xs text-gray-300 cursor-not-allowed"
+                          >
+                            <Check size={12} />
+                            Marcar tomado
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}
