@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS document_embeddings (
   chunk_text TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
 
-  embedding vector(768),  -- dimensión del modelo nomic-embed-text
+  embedding vector(512),  -- dimensión del modelo voyage-3-lite (Voyage AI)
 
   metadata JSONB DEFAULT '{}'::jsonb,
 
@@ -308,7 +308,7 @@ ON CONFLICT (user_id, channel) DO NOTHING;
 
 -- Sesión de prueba
 INSERT INTO sessions (id, user_id, session_id, metadata) VALUES
-  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'default', '{"provider": "ollama", "model": "qwen2.5:32b"}'::jsonb)
+  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'default', '{"provider": "anthropic", "model": "claude-sonnet-4-6"}'::jsonb)
 ON CONFLICT (session_id) DO NOTHING;
 
 -- ============================================================================
@@ -424,6 +424,9 @@ ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_days     TEXT;       -
 ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER   DEFAULT 1;
 ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_end_date TIMESTAMP;
 
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS taken    BOOLEAN   DEFAULT false;
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS taken_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_reminders_recurring
   ON reminders(is_recurring)
   WHERE is_recurring = true;
@@ -487,7 +490,9 @@ CREATE OR REPLACE FUNCTION get_user_reminders_grouped(
     scheduled_at TIMESTAMPTZ,
     fired_at     TIMESTAMPTZ,
     created_at   TIMESTAMPTZ,
-    status       TEXT
+    status       TEXT,
+    taken        BOOLEAN,
+    taken_at     TIMESTAMPTZ
 ) LANGUAGE sql STABLE AS $$
     SELECT
         reminder_id,
@@ -505,7 +510,9 @@ CREATE OR REPLACE FUNCTION get_user_reminders_grouped(
             WHEN bool_or(status = 'failed')    THEN 'failed'
             WHEN bool_or(status = 'completed') THEN 'completed'
             ELSE 'cancelled'
-        END
+        END,
+        bool_or(taken),
+        MAX(taken_at)
     FROM reminders
     WHERE user_id = p_user_id
       AND (p_status     IS NULL OR status = p_status::reminder_status)

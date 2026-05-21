@@ -40,6 +40,14 @@ export function fetchReminders(
   return apiFetch<Reminder[]>(`/api/users/${session.user.id}/reminders${query}`, session.accessToken)
 }
 
+export function markReminderTaken(session: Session, reminderId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/users/${session.user.id}/reminders/${reminderId}/taken`,
+    session.accessToken,
+    { method: 'PATCH' },
+  )
+}
+
 // ── Channels ─────────────────────────────────────────────────────────────────
 
 export function fetchChannels(

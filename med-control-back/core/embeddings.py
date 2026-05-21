@@ -1,13 +1,24 @@
 """
-Embedding generation using Ollama nomic-embed-text (768-dim).
+Embedding generation using Voyage AI voyage-3-lite (512-dim).
 Used after OCR to index prescription chunks for RAG search.
 """
 
+import os
+
 from core.db import save_document_embedding
+
+_voyage_client = None
+
+
+def _get_voyage_client():
+    global _voyage_client
+    if _voyage_client is None:
+        import voyageai
+        _voyage_client = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
+    return _voyage_client
 
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-    """Sliding-window chunker. Returns list of text chunks."""
     if not text.strip():
         return []
 
@@ -22,11 +33,10 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
 
 
 def _embed(text: str) -> list[float]:
-    """Generate a 768-dim embedding for a single text chunk via Ollama."""
-    import ollama
-
-    response = ollama.embeddings(model="nomic-embed-text", prompt=text)
-    return list(response["embedding"])
+    """Generate a 512-dim embedding for a single text chunk via Voyage AI."""
+    client = _get_voyage_client()
+    result = client.embed([text], model="voyage-3-lite")
+    return result.embeddings[0]
 
 
 async def generate_and_save_embeddings(doc_id: str, user_id: str, text: str) -> int:

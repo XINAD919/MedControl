@@ -78,19 +78,17 @@ Processes prescription images and PDFs to extract structured medication data.
 - `OCRResult` — contains `raw_text` (str) + `structured` (PrescriptionData).
 
 **Pipeline** (called by `process_prescription(file_bytes, content_type)`):
-1. PDF → PNG conversion via `pdf2image` if `content_type == "application/pdf"`.
-2. `preprocess_image()` — grayscale, upscale if smallest dimension < 1000px, sharpen, binarize.
-3. `run_tesseract()` — pytesseract with `spa+eng` language config.
-4. `extract_structured()` — calls the configured LLM provider with a structured extraction prompt; returns `PrescriptionData`.
-
-Requires system packages: `tesseract-ocr tesseract-ocr-spa poppler-utils`.
+Sends the image or PDF directly to Claude vision (`claude-haiku-4-5-20251001` by default, overridable via `ANTHROPIC_FAST_MODEL`). No system packages required — no Tesseract, no Poppler.
+- Images (JPEG/PNG/WEBP): sent as `image` content block.
+- PDFs: sent as `document` content block (native Anthropic PDF support).
+- Returns `OCRResult` with `raw_text` (full extracted text) + `structured` (`PrescriptionData`).
 
 ### Embeddings / RAG (`core/embeddings.py`)
 
 Generates and stores semantic embeddings for uploaded documents.
 
 - `chunk_text(text)` — splits text into chunks of ~500 chars with 50-char overlap.
-- `_embed(text)` — calls `ollama embeddings nomic-embed-text`; returns a 768-dim float list.
+- `_embed(text)` — calls Voyage AI `voyage-3-lite` via `voyageai.Client`; returns a 512-dim float list. Requires `VOYAGE_API_KEY`.
 - `generate_and_save_embeddings(document_id, user_id, text)` — chunks text, embeds each chunk, persists to `document_embeddings` via `db.save_document_embedding()`. Returns chunk count.
 
 Similarity search is done by `db.search_similar_chunks(user_id, query_embedding, top_k=3)` using pgvector's cosine distance index.
@@ -113,7 +111,7 @@ Similarity search is done by `db.search_similar_chunks(user_id, query_embedding,
 
 5. **`update_reminder(reminder_id, user_id, medication?, schedule?, message?, notes?)`** — updates one or more fields on an existing reminder row.
 
-6. **`search_knowledge_base(query, user_id)`** — embeds the query via `nomic-embed-text`, then calls `db.search_similar_chunks()` to find the top-3 most similar document chunks from the user's uploaded documents.
+6. **`search_knowledge_base(query, user_id)`** — embeds the query via Voyage AI `voyage-3-lite`, then calls `db.search_similar_chunks()` to find the top-3 most similar document chunks from the user's uploaded documents.
 
 7. **`web_search(query)`** — calls Tavily API (`TAVILY_API_KEY`); returns top-3 results with title, content snippet, and URL.
 
@@ -162,7 +160,7 @@ Key schema points (`database/init.sql`):
 - `document_type` enum: `prescription`, `medical_plan`, `lab_results`, `other`.
 - `messages` table: `session_id`, `role`, `content`, `tool_calls` (JSONB), `sequence_num` (unique per session). Replaces `historiales/*.json` for API sessions.
 - `documents` table: `user_id`, `filename`, `file_type`, `document_type`, `file_path`, `file_size`, `extracted_text`, `processed`, `embeddings_generated`, `chunk_count`.
-- `document_embeddings` table: `document_id`, `user_id`, `chunk_text`, `chunk_index`, `embedding` (vector 768), `metadata`. IVFFlat index for fast similarity search.
+- `document_embeddings` table: `document_id`, `user_id`, `chunk_text`, `chunk_index`, `embedding` (vector 512), `metadata`. IVFFlat index for fast similarity search.
 
 ### n8n workflow (`n8n-workflow.json`)
 
@@ -195,13 +193,15 @@ n8n runs as a service inside docker-compose (not a standalone container). Import
 ## Environment Variables
 
 ```env
-LLM_PROVIDER=ollama               # ollama | anthropic
-LLM_MODEL=qwen2.5:32b             # overrides provider default
-OLLAMA_HOST=http://localhost:11434
-ANTHROPIC_API_KEY=sk-ant-...      # optional, only if LLM_PROVIDER=anthropic
+LLM_PROVIDER=anthropic            # anthropic | ollama (default: anthropic)
+LLM_MODEL=claude-sonnet-4-6       # overrides provider default
+ANTHROPIC_API_KEY=sk-ant-...      # required
+ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001  # used for OCR; overrides fast model
 
-SUPABASE_URL=http://localhost:8000           # Kong gateway URL for the self-hosted Supabase stack
-SUPABASE_SERVICE_ROLE_KEY=...               # Service role key (from Supabase stack .env)
+VOYAGE_API_KEY=...                # required for embeddings (voyage-3-lite)
+
+SUPABASE_URL=https://...supabase.co          # Supabase Cloud project URL
+SUPABASE_SERVICE_ROLE_KEY=...               # Service role key (from Supabase Cloud dashboard)
 
 N8N_WEBHOOK_URL=http://localhost:5678/webhook/medai-reminder  # production URL (not /webhook-test/)
 WEBHOOK_SECRET=...                # used by n8n Callback to Backend as X-Api-Key
@@ -217,47 +217,44 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ## Key Dependencies
 
 Installed in `.venv/` (see `requirements.txt`):
-- `supabase>=2.10.0` — async Supabase SDK; replaces asyncpg for all DB and Storage access
-- `ollama==0.1.6` — Ollama async client
+- `supabase>=2.10.0` — async Supabase SDK for all DB and Storage access
+- `anthropic>=0.50.0` — LLM provider + OCR via Claude vision
+- `voyageai>=0.3.2` — embeddings via `voyage-3-lite` (512-dim)
 - `fastapi==0.109.0`, `uvicorn[standard]`, `python-multipart` — web API and file uploads
-- `httpx` — HTTP client used by `create_reminder` tool (n8n requests)
+- `httpx` — HTTP client
 - `python-dotenv` — env loading
 - `structlog==24.1.0` — structured logging
-- `pydantic==2.5.3`, `pydantic-settings==2.1.0` — validation and config
-- `pytesseract==0.3.10` — OCR wrapper (requires `tesseract-ocr` + `tesseract-ocr-spa` OS packages)
-- `Pillow==10.3.0` — image preprocessing for OCR
-- `pdf2image==1.17.0` — PDF→PNG conversion (requires `poppler-utils` OS package)
+- `pydantic==2.10.0`, `pydantic-settings==2.1.0` — validation and config
 - `tavily-python==0.3.3` — Tavily web search API client
-- `PyJWT>=2.8.0` — JWT token validation
-- `bcrypt>=4.0.0` — password hashing for email/password auth
-- `pyfiglet` — CLI banner
+- `PyJWT==2.12.1` — JWT token validation
+- `bcrypt==5.0.0` — password hashing for email/password auth
+- `pyfiglet==1.0.2` — CLI banner
 
-**Optional / not in requirements.txt** (install manually for voice mode):
+**Optional / not in requirements.txt** (install manually for voice mode, requires CUDA GPU):
 - `faster_whisper`, `kokoro_onnx`, `sounddevice`, `soundfile`, `torch`, `onnxruntime`
-- `anthropic` — only needed if `LLM_PROVIDER=anthropic`
 
 ## Notes
 
 - CLI session histories stored as JSON in `historiales/{session_id}.json`. API sessions persist to the `messages` table in Supabase.
-- Ollama must be running locally with `qwen2.5:32b` and `nomic-embed-text` pulled when using the default provider.
+- Default LLM provider is `anthropic` — requires `ANTHROPIC_API_KEY`. Ollama is still supported locally via `LLM_PROVIDER=ollama`.
 - `api/` adds the project root to `sys.path` in `api/main.py` to allow importing `core`.
 - DB seed user: `id = 11111111-1111-1111-1111-111111111111`, session `id = 22222222-...`, `session_id = "default"`.
-- Supabase full stack runs via docker-compose (Studio, Kong, GoTrue, PostgREST, Realtime, Storage, n8n). Import `n8n-workflow.json` manually via the n8n UI.
-- DB migrations for existing containers must be applied manually (`init.sql` only runs on first volume init).
-- OCR requires OS-level packages: `sudo apt install tesseract-ocr tesseract-ocr-spa poppler-utils`.
+- Supabase Cloud is used in production. For local dev, a self-hosted Supabase stack can run via docker-compose.
+- OCR has no OS-level dependencies — Claude vision handles images and PDFs natively.
 
 ## Roadmap (pending work)
 
-1. **Next.js frontend** — the WebSocket API (`WS /ws/chat`) already exists. Planned UI: chat interface, active reminders panel, notification channel settings, and document upload for OCR. Frontend scaffold is in `med-control-front/`.
+1. **OneSignal WebPush** — integration node exists in n8n workflow but needs real credentials (`ONESIGNAL_APP_ID`). Complete the WebPush delivery path end-to-end.
 
-2. **OneSignal WebPush** — integration node exists in n8n workflow but needs real credentials (`ONESIGNAL_APP_ID`). Complete the WebPush delivery path end-to-end.
+2. **WebSocket authentication** — `WS /ws/chat` accepts a `token` query param but does not enforce JWT validation in the current implementation. Needs a `get_current_user` dependency or equivalent guard before the connection is accepted.
 
-3. **WebSocket authentication** — `WS /ws/chat` accepts a `token` query param but does not enforce JWT validation in the current implementation. Needs a `get_current_user` dependency or equivalent guard before the connection is accepted.
+3. **n8n notifications** — currently disabled (`_insert_all_reminders_local` bypasses n8n). Re-enable when n8n is deployed and `N8N_WEBHOOK_URL` is configured.
 
 ---
 
 ### Previously completed (no longer pending)
 
-- ~~**OCR for prescriptions**~~ — ✅ Implemented in `core/ocr.py` + `api/routes/documents.py` (Tesseract + LLM structured extraction + RAG pipeline).
+- ~~**OCR for prescriptions**~~ — ✅ Implemented in `core/ocr.py` via Claude vision (no Tesseract/Poppler required).
 - ~~**Real authentication**~~ — ✅ JWT-based auth in `api/deps.py`; registration/login/OAuth endpoints in `api/routes/auth.py`.
 - ~~**Agent tools: `list_reminders` / `delete_reminders`**~~ — ✅ Implemented, plus `update_reminder` and `search_knowledge_base` and `web_search`.
+- ~~**Next.js frontend**~~ — ✅ Deployed in `med-control-front/`: chat, dashboard, calendar, settings, family.

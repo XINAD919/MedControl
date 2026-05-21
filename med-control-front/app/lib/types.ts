@@ -12,6 +12,8 @@ export interface Reminder {
   fired_at: string | null
   status: ReminderStatus
   created_at: string
+  taken: boolean
+  taken_at: string | null
 }
 
 export interface Channel {

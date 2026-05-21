@@ -14,12 +14,12 @@ class AnthropicProvider(BaseProvider):
     def supports_tools(self) -> bool:
         return True
 
-    def _normalize_messages(self, messages: list[dict]) -> tuple[str, list[dict]]:
+    def _normalize_messages(self, messages: list[dict]) -> tuple[list[dict] | str, list[dict]]:
         """
         Convierte el historial interno (formato Ollama/OpenAI) al formato de Anthropic.
-        Retorna (system_prompt, messages_list).
+        Retorna (system_blocks, messages_list).
         """
-        system = ""
+        system_text = ""
         result: list[dict] = []
         tool_id_counter = 0
         pending_tool_ids: list[str] = []
@@ -28,7 +28,7 @@ class AnthropicProvider(BaseProvider):
             role = msg["role"]
 
             if role == "system":
-                system = msg["content"]
+                system_text = msg["content"]
 
             elif role == "user":
                 result.append({"role": "user", "content": msg["content"]})
@@ -67,10 +67,15 @@ class AnthropicProvider(BaseProvider):
                     ],
                 })
 
+        system: list[dict] | str = (
+            [{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}]
+            if system_text
+            else ""
+        )
         return system, result
 
     def _convert_tools(self, tools: list[dict]) -> list[dict]:
-        return [
+        converted = [
             {
                 "name": t["function"]["name"],
                 "description": t["function"]["description"],
@@ -78,6 +83,9 @@ class AnthropicProvider(BaseProvider):
             }
             for t in tools
         ]
+        if converted:
+            converted[-1]["cache_control"] = {"type": "ephemeral"}
+        return converted
 
     async def stream(
         self,

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { fetchReminders } from '../lib/api'
+import { fetchReminders, markReminderTaken } from '../lib/api'
 import type { Reminder, ReminderStatus } from '../lib/types'
-import { CalendarDays, Clock, Pill } from 'lucide-react'
+import { CalendarDays, Check, Clock, Pill } from 'lucide-react'
 
 const STATUS_CLASSES: Record<ReminderStatus, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -41,8 +41,23 @@ function formatDate(dateStr: string) {
   })
 }
 
+function toUtcDate(iso: string): Date {
+  // Treat bare datetime strings (no timezone suffix) as UTC
+  const hasOffset = /([+-]\d{2}:\d{2}|Z)$/.test(iso)
+  return new Date(hasOffset ? iso : iso + 'Z')
+}
+
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  return toUtcDate(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+function localDateKey(iso: string): string {
+  // Returns YYYY-MM-DD in the user's local timezone
+  const d = toUtcDate(iso)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function CalendarPage() {
@@ -61,6 +76,15 @@ export default function CalendarPage() {
       .finally(() => setLoading(false))
   }, [session])
 
+  function handleTaken(reminderId: string) {
+    if (!session) return
+    markReminderTaken(session, reminderId).then(() => {
+      setReminders(prev => prev.map(r =>
+        r.reminder_id === reminderId ? { ...r, taken: true, taken_at: new Date().toISOString() } : r
+      ))
+    }).catch(() => {})
+  }
+
   const grouped = useMemo(() => {
     const filtered = reminders
       .filter(r => filter === 'all' || r.status === filter)
@@ -68,7 +92,7 @@ export default function CalendarPage() {
 
     const map: Record<string, Reminder[]> = {}
     for (const r of filtered) {
-      const date = r.scheduled_at.split('T')[0]
+      const date = localDateKey(r.scheduled_at)
       if (!map[date]) map[date] = []
       map[date].push(r)
     }
@@ -167,9 +191,25 @@ export default function CalendarPage() {
                         </span>
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_CLASSES[r.status]}`}>
-                      {STATUS_LABELS[r.status]}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[r.status]}`}>
+                        {STATUS_LABELS[r.status]}
+                      </span>
+                      {r.taken ? (
+                        <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                          <Check size={12} />
+                          Tomado
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleTaken(r.reminder_id)}
+                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition-colors"
+                        >
+                          <Check size={12} />
+                          Marcar tomado
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

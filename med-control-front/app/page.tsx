@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { fetchReminders } from './lib/api'
+import { fetchReminders, markReminderTaken } from './lib/api'
 import type { Reminder, ReminderStatus } from './lib/types'
-import { CalendarDays, Clock } from 'lucide-react'
+import { CalendarDays, Check, Clock } from 'lucide-react'
 
 const STATUS_CLASSES: Record<ReminderStatus, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -22,25 +22,57 @@ const STATUS_LABELS: Record<ReminderStatus, string> = {
   cancelled: 'Cancelado',
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+function toUtcDate(iso: string): Date {
+  const hasOffset = /([+-]\d{2}:\d{2}|Z)$/.test(iso)
+  return new Date(hasOffset ? iso : iso + 'Z')
 }
 
-function ReminderCard({ reminder }: { reminder: Reminder }) {
+function localDateKey(iso: string): string {
+  const d = toUtcDate(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function localTodayKey(): string {
+  return localDateKey(new Date().toISOString())
+}
+
+function formatTime(iso: string) {
+  return toUtcDate(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+function ReminderCard({ reminder, onTaken }: { reminder: Reminder; onTaken: (id: string) => void }) {
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col gap-2">
+    <div className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col gap-2 transition-colors ${reminder.taken ? 'border-green-100 opacity-75' : 'border-blue-50'}`}>
       <div className="flex items-start justify-between gap-2">
-        <span className="font-semibold text-gray-800 text-sm leading-tight">{reminder.medication}</span>
+        <span className={`font-semibold text-sm leading-tight ${reminder.taken ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+          {reminder.medication}
+        </span>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_CLASSES[reminder.status]}`}>
           {STATUS_LABELS[reminder.status]}
         </span>
       </div>
       <p className="text-xs text-gray-400 line-clamp-2">{reminder.message}</p>
-      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-        <Clock size={12} />
-        <span>{formatTime(reminder.scheduled_at)}</span>
-        <span className="mx-1">·</span>
-        <span>{reminder.channels.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(', ')}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          <Clock size={12} />
+          <span>{formatTime(reminder.scheduled_at)}</span>
+          <span className="mx-1">·</span>
+          <span>{reminder.channels.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(', ')}</span>
+        </div>
+        {reminder.taken ? (
+          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+            <Check size={12} />
+            Tomado
+          </span>
+        ) : (
+          <button
+            onClick={() => onTaken(reminder.reminder_id)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition-colors"
+          >
+            <Check size={12} />
+            Marcar tomado
+          </button>
+        )}
       </div>
     </div>
   )
@@ -68,22 +100,35 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session) return
-    const today = new Date().toISOString().split('T')[0]
-    Promise.all([
-      fetchReminders(session, { date: today }),
-      fetchReminders(session, { status: 'scheduled' }),
-    ])
-      .then(([todayData, upcomingData]) => {
-        setTodayReminders(todayData)
-        // Upcoming: exclude today and limit to next 10
-        const upcoming = upcomingData
-          .filter(r => r.scheduled_at.split('T')[0] !== today)
-          .slice(0, 10)
-        setUpcomingReminders(upcoming)
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+
+    const load = () => {
+      const today = localTodayKey()
+      fetchReminders(session)
+        .then((all) => {
+          setTodayReminders(all.filter(r => localDateKey(r.scheduled_at) === today))
+          const upcoming = all
+            .filter(r => r.status === 'scheduled' && localDateKey(r.scheduled_at) !== today)
+            .slice(0, 10)
+          setUpcomingReminders(upcoming)
+          setError(null)
+        })
+        .catch(err => setError(err.message))
+        .finally(() => setLoading(false))
+    }
+
+    load()
+    const interval = setInterval(load, 30_000)
+    return () => clearInterval(interval)
   }, [session])
+
+  function handleTaken(reminderId: string) {
+    if (!session) return
+    markReminderTaken(session, reminderId).then(() => {
+      const patch = (r: Reminder) => r.reminder_id === reminderId ? { ...r, taken: true, taken_at: new Date().toISOString() } : r
+      setTodayReminders(prev => prev.map(patch))
+      setUpcomingReminders(prev => prev.map(patch))
+    }).catch(() => {})
+  }
 
   if (status === 'loading') return <div className="p-6 animate-pulse"><div className="h-6 bg-white rounded w-48" /></div>
   if (!session) return null
@@ -126,7 +171,7 @@ export default function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {todayReminders.map(r => (
-              <ReminderCard key={r.reminder_id} reminder={r} />
+              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} />
             ))}
           </div>
         )}
@@ -141,7 +186,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col gap-3">
             {upcomingReminders.map(r => (
-              <ReminderCard key={r.reminder_id} reminder={r} />
+              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} />
             ))}
           </div>
         </section>

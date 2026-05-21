@@ -5,7 +5,6 @@ POST /api/users/{user_id}/documents  — upload prescription image or PDF
 GET  /api/users/{user_id}/documents  — list user's uploaded documents
 """
 
-import asyncio
 import logging
 from typing import Annotated
 
@@ -59,17 +58,25 @@ async def _process_document_background(
 ) -> None:
     """Run OCR + embedding generation after the HTTP response is returned."""
     try:
-        loop = asyncio.get_running_loop()
-        ocr_result = await loop.run_in_executor(
-            None, process_prescription, file_bytes, mimetype
-        )
+        ocr_result = await process_prescription(file_bytes, mimetype)
+
+        if not ocr_result.raw_text:
+            error_detail = ocr_result.structured.raw_notes or "Claude OCR returned empty text"
+            logger.error("OCR produced no text for doc %s: %s", doc_id, error_detail)
+            await update_document_processing(doc_id, f"[OCR error: {error_detail}]", 0)
+            return
+
         chunk_count = await generate_and_save_embeddings(
             doc_id, user_id, ocr_result.raw_text
         )
         await update_document_processing(doc_id, ocr_result.raw_text, chunk_count)
         logger.info("Document %s processed: %d chunks", doc_id, chunk_count)
     except Exception as e:
-        logger.error("OCR background task failed for doc %s: %s", doc_id, e)
+        logger.error("OCR background task failed for doc %s: %s", doc_id, e, exc_info=True)
+        try:
+            await update_document_processing(doc_id, f"[Processing error: {e}]", 0)
+        except Exception:
+            pass
 
 
 @router.post(

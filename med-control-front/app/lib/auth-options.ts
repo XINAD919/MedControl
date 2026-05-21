@@ -1,5 +1,5 @@
 import { SignJWT } from 'jose'
-import type { NextAuthOptions } from 'next-auth'
+import type { DefaultSession, NextAuthOptions } from 'next-auth'
 import AzureADProvider from 'next-auth/providers/azure-ad'
 import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
@@ -8,6 +8,13 @@ declare module 'next-auth' {
   interface Session {
     accessToken: string
     idToken?: string
+    user: {
+      id: string
+      role: string
+    } & DefaultSession['user']
+  }
+  interface User {
+    role?: string
   }
 }
 
@@ -42,18 +49,27 @@ export async function resolveBackendUser(
   return res.json() as Promise<{ id: string; role: string }>
 }
 
+const providers: NextAuthOptions['providers'] = []
+
+if (process.env.AUTH_AZURE_AD_CLIENT_ID && process.env.AUTH_AZURE_AD_CLIENT_SECRET) {
+  providers.push(AzureADProvider({
+    clientId: process.env.AUTH_AZURE_AD_CLIENT_ID,
+    clientSecret: process.env.AUTH_AZURE_AD_CLIENT_SECRET,
+    tenantId: process.env.AUTH_AZURE_AD_TENANT_ID as string,
+    checks: ['pkce', 'state'],
+  }))
+}
+
+if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+  providers.push(Google({
+    clientId: process.env.AUTH_GOOGLE_ID,
+    clientSecret: process.env.AUTH_GOOGLE_SECRET,
+  }))
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
-    AzureADProvider({
-      clientId: process.env.AUTH_AZURE_AD_CLIENT_ID as string,
-      clientSecret: process.env.AUTH_AZURE_AD_CLIENT_SECRET as string,
-      tenantId: process.env.AUTH_AZURE_AD_TENANT_ID as string,
-      checks: ['pkce', 'state'],
-    }),
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID as string,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET as string,
-    }),
+    ...providers,
     Credentials({
       name: 'Credenciales',
       credentials: {

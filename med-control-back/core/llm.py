@@ -179,7 +179,7 @@ class Agent:
     def _charge_historial(self) -> None:
         try:
             if self.historial_path.exists():
-                with open(self.historial_path, "r") as file:
+                with open(self.historial_path, "r", encoding="utf-8") as file:
                     loaded = json.load(file)
                 if loaded and loaded[0]["role"] == "system":
                     loaded[0] = self.MESSAGES[0].copy()
@@ -231,8 +231,9 @@ class Agent:
             },
         ]
 
+        fast_provider = create_provider(fast=True)
         summary = ""
-        async for event in self.provider.stream(summary_prompt, []):
+        async for event in fast_provider.stream(summary_prompt, []):
             if event["type"] == "token":
                 summary += event["content"]
 
@@ -258,7 +259,7 @@ class Agent:
     def _save_historial(self) -> None:
         try:
             self.HISTORIALES_DIR.mkdir(exist_ok=True)
-            with open(self.historial_path, "w") as file:
+            with open(self.historial_path, "w", encoding="utf-8") as file:
                 json.dump(self.historial, file, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Error al guardar el historial: {e}")

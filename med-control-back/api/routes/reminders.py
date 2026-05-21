@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from core.db import get_user_reminders
+from core.supabase_client import get_supabase
 from deps import CurrentUser, get_current_user
 
 router = APIRouter()
@@ -25,6 +26,8 @@ class ReminderResponse(BaseModel):
     fired_at: Optional[str]
     status: str
     created_at: str
+    taken: bool = False
+    taken_at: Optional[str] = None
 
 
 @router.get("/users/{user_id}/reminders", response_model=list[ReminderResponse])
@@ -61,6 +64,25 @@ async def list_reminders(
             fired_at=fmt(r.get("fired_at")),
             status=str(r["status"]),
             created_at=fmt(r["created_at"]),
+            taken=bool(r.get("taken", False)),
+            taken_at=fmt(r.get("taken_at")),
         )
         for r in rows
     ]
+
+
+@router.patch("/users/{user_id}/reminders/{reminder_id}/taken")
+async def mark_reminder_taken(
+    user_id: str,
+    reminder_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    if user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    try:
+        db = get_supabase()
+        now = datetime.utcnow().isoformat()
+        await db.table("reminders").update({"taken": True, "taken_at": now}).eq("reminder_id", reminder_id).eq("user_id", user_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True}

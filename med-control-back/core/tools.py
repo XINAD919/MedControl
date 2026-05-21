@@ -1,15 +1,36 @@
 import asyncio
 import concurrent.futures
+import json
 import os
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+_TZ = ZoneInfo(os.getenv("TIMEZONE", "UTC"))
 
 
 # ── Async helpers for new tools ────────────────────────────────────────────
 
 async def _search_chunks(user_id: str, query_embedding: list[float]) -> list[dict]:
-    from core.db import search_similar_chunks
-    return await search_similar_chunks(user_id, query_embedding, top_k=3)
+    from core.supabase_client import create_temp_client
+    client = await create_temp_client()
+    try:
+        res = await client.rpc("search_similar_chunks", {
+            "p_user_id": user_id,
+            "p_embedding": query_embedding,
+            "p_top_k": 3,
+        }).execute()
+        return [
+            {
+                "filename": row["filename"],
+                "chunk_text": row["chunk_text"],
+                "metadata": row["metadata"],
+                "distance": float(row["distance"]),
+            }
+            for row in (res.data or [])
+        ]
+    finally:
+        await client.aclose()
 
 
 async def _fetch_reminders(
@@ -60,6 +81,49 @@ async def _fetch_notification_channels(user_id: str) -> list[dict]:
         await client.aclose()
 
 
+async def _insert_all_reminders_local(tasks: list[dict]) -> None:
+    """Inserta los recordatorios directamente en Supabase sin pasar por n8n."""
+    from core.supabase_client import create_temp_client
+    client = await create_temp_client()
+    try:
+        session_cache: dict[str, str | None] = {}
+        rows = []
+        for p in tasks:
+            sid_str = p["session_id"]
+            if sid_str not in session_cache:
+                if sid_str and sid_str != "unknown":
+                    res = await client.table("sessions").select("id").eq("session_id", sid_str).execute()
+                    session_cache[sid_str] = res.data[0]["id"] if res.data else None
+                else:
+                    session_cache[sid_str] = None
+            session_uuid = session_cache[sid_str]
+
+            for ch in p["channels"]:
+                rows.append({
+                    "reminder_id": p["reminder_id"],
+                    "user_id": p["user_id"],
+                    "session_id": session_uuid,
+                    "medication": p["medication"],
+                    "schedule": p["schedule"],
+                    "message": p["message"],
+                    "notes": p["notes"] or None,
+                    "channel": ch["channel"],
+                    "notify_id": ch["notify_id"],
+                    "scheduled_at": p["scheduled_at"],
+                    "status": "scheduled",
+                    "is_recurring": p["is_recurring"],
+                    "recurrence_type": p["recurrence_type"] or None,
+                    "recurrence_days": json.dumps(p["recurrence_days"]) if p["recurrence_days"] else None,
+                    "recurrence_interval": p["recurrence_interval"] or 1,
+                    "recurrence_end_date": p["recurrence_end_date"] or None,
+                })
+
+        if rows:
+            await client.table("reminders").upsert(rows, on_conflict="reminder_id,channel").execute()
+    finally:
+        await client.aclose()
+
+
 async def _update_user_reminder(
     reminder_id: str,
     user_id: Optional[str] = None,
@@ -89,7 +153,7 @@ async def _update_user_reminder(
 
 
 def get_current_datetime() -> str:
-    return datetime.now().strftime("%A, %d de %B de %Y, %H:%M:%S")
+    return datetime.now(_TZ).strftime("%A, %d de %B de %Y, %H:%M:%S")
 
 
 def create_reminder(
@@ -106,8 +170,6 @@ def create_reminder(
     recurrence_interval: Optional[int] = None,
     recurrence_end_date: Optional[str] = None,
 ) -> str:
-    import httpx
-
     if not user_id:
         return "Error: user_id no proporcionado. No se puede crear recordatorio."
 
@@ -132,10 +194,6 @@ def create_reminder(
             return f"Error: recurrence_end_date '{recurrence_end_date}' debe tener formato YYYY-MM-DD."
     if recurrence_type == "weekly" and not recurrence_days:
         return "Error: recurrence_days es requerido para recurrence_type='weekly'. Ejemplo: [1, 3, 5]"
-
-    webhook_url = os.getenv(
-        "N8N_WEBHOOK_URL", "http://localhost:5678/webhook/medai-reminder"
-    )
 
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -175,15 +233,18 @@ def create_reminder(
     ]
     primary = channels_to_notify[0]  # siempre webpush
 
-    now = datetime.now()
+    now = datetime.now(_TZ)
+    _UTC = ZoneInfo("UTC")
     for time_str in schedule_times:
         try:
             target_time = datetime.strptime(time_str, "%H:%M")
             target = now.replace(
-                hour=target_time.hour, minute=target_time.minute, second=0, microsecond=0
+                hour=target_time.hour, minute=target_time.minute, second=0, microsecond=0,
+                tzinfo=_TZ,
             )
             if target <= now:
                 target += timedelta(days=1)
+            target_utc = target.astimezone(_UTC).replace(tzinfo=None)
             delay_minutes = max(1, int((target - now).total_seconds() / 60))
         except ValueError:
             errors.append(f"Horario '{time_str}': formato inválido (se esperaba HH:MM)")
@@ -205,43 +266,35 @@ def create_reminder(
             # array completo para el split en n8n
             "channels": channels_array,
             "delay_minutes": delay_minutes,
-            "created_at": now.isoformat(),
+            "scheduled_at": target_utc.isoformat(),
+            "created_at": now.astimezone(_UTC).replace(tzinfo=None).isoformat(),
             "is_recurring": recurrence_type is not None,
             "recurrence_type": recurrence_type or "",
             "recurrence_days": recurrence_days or [],
             "recurrence_interval": recurrence_interval or 1,
             "recurrence_end_date": recurrence_end_date or "",
-            "n8n_webhook_url": webhook_url,
         })
 
-    def _post(p: dict) -> tuple[str, str | None]:
-        try:
-            httpx.post(webhook_url, json=p, timeout=10).raise_for_status()
-            return p["schedule"], None
-        except httpx.HTTPStatusError as e:
-            return p["schedule"], f"{p['schedule']}: HTTP {e.response.status_code}"
-        except httpx.RequestError as e:
-            return p["schedule"], f"{p['schedule']}: sin conexión ({e})"
-
+    # ── n8n DESACTIVADO TEMPORALMENTE: inserción directa en Supabase ──────────
     if tasks:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tasks), 8)) as ex:
-            for time_str, err in ex.map(_post, tasks):
-                if err is None:
-                    sent_times.append(time_str)
-                else:
-                    errors.append(err)
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                ex.submit(asyncio.run, _insert_all_reminders_local(tasks)).result(timeout=15)
+            sent_times = [p["schedule"] for p in tasks]
+        except Exception as e:
+            errors.append(str(e))
 
     if not sent_times:
         return (
-            "Error al crear recordatorio: no se pudo contactar con n8n. "
+            "Error al crear recordatorio en la base de datos. "
             f"Detalles: {'; '.join(errors)}"
         )
 
     first_time = schedule_times[0]
     try:
         t = datetime.strptime(first_time, "%H:%M")
-        now_ref = datetime.now()
-        t_target = now_ref.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+        now_ref = datetime.now(_TZ)
+        t_target = now_ref.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0, tzinfo=_TZ)
         if t_target <= now_ref:
             t_target += timedelta(days=1)
         fecha_programada = t_target.strftime("%d/%m/%Y a las %H:%M")
@@ -259,12 +312,11 @@ def create_reminder(
         else ""
     )
     result = (
-        f"Recordatorio creado exitosamente.\n\n"
+        f"Recordatorio guardado exitosamente.\n\n"
         f"Medicamento: {medication}\n"
         f"Programado para: {fecha_programada}\n"
         f"Canales: {canal_labels}"
-        f"{recurrence_info}\n"
-        f"Te notificaremos en {delay_first} minuto{'s' if delay_first != 1 else ''}."
+        f"{recurrence_info}"
     )
     if errors:
         result += f"\n\nAdvertencia: algunos envíos fallaron: {'; '.join(errors)}"
@@ -305,19 +357,9 @@ def list_reminders(
     if not reminders:
         return "No se encontraron recordatorios."
 
-    from collections import defaultdict
-
-    grouped: dict = defaultdict(lambda: None)
-    for r in reminders:
-        rid = r["reminder_id"]
-        if grouped[rid] is None:
-            grouped[rid] = {**r, "channels": [r["channel"]]}
-        else:
-            grouped[rid]["channels"].append(r["channel"])
-
     lines = []
-    for r in grouped.values():
-        canales = ", ".join(ch.title() for ch in r["channels"])
+    for r in reminders:
+        canales = ", ".join(ch.title() for ch in (r.get("channels") or []))
         lines.append(
             f"ID: {r['reminder_id']}\n"
             f"Medicamento: {r['medication']}\n"
@@ -369,11 +411,9 @@ def search_knowledge_base(
     if not user_id:
         return "Error: user_id no proporcionado. No se puede buscar en la base de conocimiento."
 
-    import ollama
-
     try:
-        response = ollama.embeddings(model="nomic-embed-text", prompt=query)
-        query_embedding = list(response["embedding"])
+        from core.embeddings import _embed
+        query_embedding = _embed(query)
     except Exception as e:
         return f"Error al generar embedding de búsqueda: {e}"
 
