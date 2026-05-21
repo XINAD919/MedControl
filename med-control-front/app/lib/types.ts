@@ -45,6 +45,26 @@ export interface Document {
 
 export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error'
 
+export interface AdherenceMetrics {
+  total_due: number
+  total_taken: number
+  adherence_rate: number
+  punctuality_rate: number
+  avg_delay_minutes: number
+  recent_adherence_rate: number
+  medications: string[]
+  trend: 'mejorando' | 'estable' | 'empeorando'
+}
+
+export interface AdherenceAnalysis {
+  id: string
+  score: number
+  metrics: AdherenceMetrics
+  llm_comment: string
+  period_days: number
+  created_at: string
+}
+
 export interface ReminderNotification {
   id: string
   reminder_id: string

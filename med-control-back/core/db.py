@@ -388,6 +388,61 @@ async def get_user_documents(user_id: str) -> list[dict]:
 # ============================================================================
 
 
+# ============================================================================
+# Adherencia
+# ============================================================================
+
+
+async def save_adherence_analysis(
+    user_id: str,
+    score: float,
+    metrics: dict,
+    llm_comment: str,
+    period_days: int = 30,
+) -> str:
+    client = get_supabase()
+    res = await client.table("adherence_analyses").insert({
+        "user_id": user_id,
+        "score": score,
+        "metrics": metrics,
+        "llm_comment": llm_comment,
+        "period_days": period_days,
+    }).execute()
+    return str(res.data[0]["id"])
+
+
+async def get_latest_adherence_analysis(user_id: str) -> Optional[dict]:
+    client = get_supabase()
+    res = await (
+        client.table("adherence_analyses")
+        .select("id, score, metrics, llm_comment, period_days, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .maybe_single()
+        .execute()
+    )
+    return res.data if res else None
+
+
+async def get_reminders_for_adherence(user_id: str, period_days: int = 30) -> list[dict]:
+    """Retorna recordatorios pasados dentro del período para calcular métricas."""
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=period_days)).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+    client = get_supabase()
+    res = await (
+        client.table("reminders")
+        .select("medication, scheduled_at, taken, taken_at, status")
+        .eq("user_id", user_id)
+        .gte("scheduled_at", since)
+        .lte("scheduled_at", now)
+        .order("scheduled_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+
 async def get_user_notifications(user_id: str, status: Optional[str] = None) -> list[dict]:
     client = get_supabase()
     q = (
