@@ -1,5 +1,5 @@
 import type { Session } from 'next-auth'
-import type { Channel, ChannelType, Document, Reminder, ReminderNotification } from './types'
+import type { AdherenceAnalysis, Channel, ChannelType, Document, Reminder, ReminderNotification } from './types'
 import { assertCanWrite } from './rbac'
 
 const BASE_URL = '/api/backend'
@@ -128,6 +128,26 @@ export async function uploadDocument(session: Session, file: File): Promise<Docu
     throw new Error(text || `HTTP ${res.status}`)
   }
   return res.json() as Promise<Document>
+}
+
+// ── Adherencia ────────────────────────────────────────────────────────────────
+
+export function fetchLatestAdherenceAnalysis(session: Session): Promise<AdherenceAnalysis | null> {
+  return apiFetch<AdherenceAnalysis | null>(
+    `/api/users/${session.user.id}/adherence-analysis/latest`,
+    session.accessToken,
+  )
+}
+
+export function generateAdherenceAnalysis(
+  session: Session,
+  periodDays = 30,
+): Promise<AdherenceAnalysis> {
+  return apiFetch<AdherenceAnalysis>(
+    `/api/users/${session.user.id}/adherence-analysis?period_days=${periodDays}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
 }
 
 // ── WebSocket chat ────────────────────────────────────────────────────────────

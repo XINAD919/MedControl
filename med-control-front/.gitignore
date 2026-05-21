@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pnpm auto-generated workspace config (no es un monorepo)
+pnpm-workspace.yaml
+
+# lockfile de npm (usamos pnpm)
+package-lock.json
