@@ -1,5 +1,5 @@
 import type { Session } from 'next-auth'
-import type { Channel, ChannelType, Document, Reminder } from './types'
+import type { AdherenceAnalysis, Channel, ChannelType, Document, Reminder, ReminderNotification } from './types'
 import { assertCanWrite } from './rbac'
 
 const BASE_URL = '/api/backend'
@@ -38,6 +38,14 @@ export function fetchReminders(
   if (params.medication) qs.set('medication', params.medication)
   const query = qs.toString() ? `?${qs}` : ''
   return apiFetch<Reminder[]>(`/api/users/${session.user.id}/reminders${query}`, session.accessToken)
+}
+
+export function markReminderTaken(session: Session, reminderId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/users/${session.user.id}/reminders/${reminderId}/taken`,
+    session.accessToken,
+    { method: 'PATCH' },
+  )
 }
 
 // ── Channels ─────────────────────────────────────────────────────────────────
@@ -88,6 +96,21 @@ export function toggleChannelReminders(
   )
 }
 
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export function fetchNotifications(
+  session: Session,
+  status?: string,
+): Promise<ReminderNotification[]> {
+  const qs = new URLSearchParams()
+  if (status) qs.set('status', status)
+  const query = qs.toString() ? `?${qs}` : ''
+  return apiFetch<ReminderNotification[]>(
+    `/api/users/${session.user.id}/notifications${query}`,
+    session.accessToken,
+  )
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function uploadDocument(session: Session, file: File): Promise<Document> {
@@ -105,6 +128,26 @@ export async function uploadDocument(session: Session, file: File): Promise<Docu
     throw new Error(text || `HTTP ${res.status}`)
   }
   return res.json() as Promise<Document>
+}
+
+// ── Adherencia ────────────────────────────────────────────────────────────────
+
+export function fetchLatestAdherenceAnalysis(session: Session): Promise<AdherenceAnalysis | null> {
+  return apiFetch<AdherenceAnalysis | null>(
+    `/api/users/${session.user.id}/adherence-analysis/latest`,
+    session.accessToken,
+  )
+}
+
+export function generateAdherenceAnalysis(
+  session: Session,
+  periodDays = 30,
+): Promise<AdherenceAnalysis> {
+  return apiFetch<AdherenceAnalysis>(
+    `/api/users/${session.user.id}/adherence-analysis?period_days=${periodDays}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
 }
 
 // ── WebSocket chat ────────────────────────────────────────────────────────────

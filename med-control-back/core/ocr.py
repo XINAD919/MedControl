@@ -1,18 +1,13 @@
 """
-OCR pipeline for prescription images.
-
-Flow:
-  1. preprocess_image  — grayscale, upscale if needed, sharpen, binarize
-  2. run_tesseract     — extract raw text (spa+eng)
-  3. extract_structured — call LLM to parse medication/dose/frequency/duration
-  4. process_prescription — orchestrates all steps; handles PDF on the way in
+OCR pipeline for prescription images using Claude vision.
+Accepts JPEG, PNG, WEBP, or PDF — no system dependencies required.
 """
 
+import base64
 import json
 import os
-from io import BytesIO
 
-from PIL import Image, ImageFilter
+import anthropic as anthropic_sdk
 
 
 # ── Data models ────────────────────────────────────────────────────────────
@@ -55,70 +50,59 @@ class OCRResult:
         self.structured = structured
 
 
-# ── Image preprocessing ────────────────────────────────────────────────────
+# ── Prompt ─────────────────────────────────────────────────────────────────
 
-def preprocess_image(image_bytes: bytes) -> Image.Image:
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    gray = img.convert("L")
-
-    # Upscale small images so Tesseract has more pixels to work with
-    w, h = gray.size
-    if w < 1000:
-        scale = 1000 / w
-        gray = gray.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-
-    sharpened = gray.filter(ImageFilter.SHARPEN)
-    # Simple binarization: pixels > 128 → white, else → black
-    binarized = sharpened.point(lambda px: 255 if px > 128 else 0, "L")
-    return binarized
-
-
-# ── Tesseract OCR ──────────────────────────────────────────────────────────
-
-def run_tesseract(image: Image.Image) -> str:
-    import pytesseract
-
-    raw = pytesseract.image_to_string(
-        image,
-        lang="spa+eng",
-        config="--oem 3 --psm 6",
-    )
-    lines = [ln.strip() for ln in raw.splitlines()]
-    return "\n".join(ln for ln in lines if ln)
-
-
-# ── LLM-based structured extraction ───────────────────────────────────────
-
-_EXTRACTION_PROMPT = """Eres un asistente médico. Extrae la información de la siguiente receta médica y devuelve ÚNICAMENTE un JSON válido con estas claves:
-- "medication": nombre del medicamento (string, requerido — usa "" si no lo encuentras)
-- "dose": dosis por toma (string o null)
+_PROMPT = """Eres un asistente médico. Analiza esta receta médica y devuelve ÚNICAMENTE un JSON válido con estas claves:
+- "raw_text": todo el texto que puedes leer en la imagen (string)
+- "medication": nombre del medicamento (string — usa "" si no lo encuentras)
+- "dose": dosis por toma, ej. "500mg" (string o null)
 - "frequency": frecuencia de toma, ej. "cada 8 horas", "1 vez al día" (string o null)
 - "duration": duración del tratamiento, ej. "7 días", "1 mes" (string o null)
 - "prescribing_doctor": nombre del médico si aparece (string o null)
 - "raw_notes": instrucciones adicionales o notas importantes (string o null)
 
-Texto de la receta:
-{text}
-
 Devuelve solo el JSON, sin explicaciones ni markdown."""
 
 
-def extract_structured(raw_text: str) -> PrescriptionData:
-    """Call the local LLM to parse structured data from raw OCR text."""
-    import ollama
+# ── Main entry point ───────────────────────────────────────────────────────
 
-    model = os.getenv("LLM_MODEL", "qwen2.5:32b")
-    prompt = _EXTRACTION_PROMPT.format(text=raw_text[:3000])
+async def process_prescription(file_bytes: bytes, mimetype: str) -> OCRResult:
+    """
+    Extract structured data from a prescription using Claude vision.
+    Accepts JPEG, PNG, WEBP, or PDF bytes.
+    """
+    client = anthropic_sdk.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    model = os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001")
+
+    encoded = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+    if mimetype == "application/pdf":
+        content_block: dict = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": encoded},
+        }
+    else:
+        if mimetype == "image/jpg":
+            mimetype = "image/jpeg"
+        content_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": mimetype, "data": encoded},
+        }
 
     try:
-        response = ollama.chat(
+        response = await client.messages.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0},
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [content_block, {"type": "text", "text": _PROMPT}],
+                }
+            ],
         )
-        content = response["message"]["content"].strip()
 
-        # Strip markdown code fences if present
+        content = response.content[0].text.strip()
+
         if content.startswith("```"):
             content = content.split("```")[1]
             if content.startswith("json"):
@@ -126,43 +110,19 @@ def extract_structured(raw_text: str) -> PrescriptionData:
             content = content.strip()
 
         data = json.loads(content)
-        return PrescriptionData(
-            medication=data.get("medication", ""),
-            dose=data.get("dose"),
-            frequency=data.get("frequency"),
-            duration=data.get("duration"),
-            prescribing_doctor=data.get("prescribing_doctor"),
-            raw_notes=data.get("raw_notes"),
+        return OCRResult(
+            raw_text=data.get("raw_text", ""),
+            structured=PrescriptionData(
+                medication=data.get("medication", ""),
+                dose=data.get("dose"),
+                frequency=data.get("frequency"),
+                duration=data.get("duration"),
+                prescribing_doctor=data.get("prescribing_doctor"),
+                raw_notes=data.get("raw_notes"),
+            ),
         )
-    except Exception:
-        return PrescriptionData(medication="", raw_notes=raw_text[:500])
-
-
-# ── Main entry point ───────────────────────────────────────────────────────
-
-def process_prescription(image_bytes: bytes, mimetype: str) -> OCRResult:
-    """
-    Full OCR pipeline. Accepts JPEG, PNG, WEBP, or PDF bytes.
-    Raises ValueError if Tesseract returns less than 50 characters.
-    """
-    if mimetype == "application/pdf":
-        from pdf2image import convert_from_bytes
-
-        pages = convert_from_bytes(image_bytes, dpi=200, first_page=1, last_page=1)
-        if not pages:
-            raise ValueError("PDF has no pages.")
-        buf = BytesIO()
-        pages[0].save(buf, format="PNG")
-        image_bytes = buf.getvalue()
-
-    preprocessed = preprocess_image(image_bytes)
-    raw_text = run_tesseract(preprocessed)
-
-    if len(raw_text.strip()) < 50:
-        raise ValueError(
-            f"OCR produced insufficient text ({len(raw_text.strip())} chars). "
-            "The image may be too low quality or upside down."
+    except Exception as e:
+        return OCRResult(
+            raw_text="",
+            structured=PrescriptionData(medication="", raw_notes=f"Error al procesar la receta: {e}"),
         )
-
-    structured = extract_structured(raw_text)
-    return OCRResult(raw_text=raw_text, structured=structured)

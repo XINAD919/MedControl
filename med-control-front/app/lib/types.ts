@@ -1,5 +1,5 @@
 export type ReminderStatus = 'scheduled' | 'firing' | 'completed' | 'failed' | 'cancelled'
-export type ChannelType = 'telegram' | 'email' | 'discord' | 'webpush' | 'whatsapp'
+export type ChannelType = 'telegram' | 'email' | 'discord' | 'webpush' | 'whatsapp' | 'sms'
 
 export interface Reminder {
   reminder_id: string
@@ -12,6 +12,8 @@ export interface Reminder {
   fired_at: string | null
   status: ReminderStatus
   created_at: string
+  taken: boolean
+  taken_at: string | null
 }
 
 export interface Channel {
@@ -42,3 +44,39 @@ export interface Document {
 }
 
 export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error'
+
+export interface AdherenceMetrics {
+  total_due: number
+  total_taken: number
+  adherence_rate: number
+  punctuality_rate: number
+  avg_delay_minutes: number
+  recent_adherence_rate: number
+  medications: string[]
+  trend: 'mejorando' | 'estable' | 'empeorando'
+}
+
+export interface AdherenceAnalysis {
+  id: string
+  score: number
+  metrics: AdherenceMetrics
+  llm_comment: string
+  period_days: number
+  created_at: string
+}
+
+export interface ReminderNotification {
+  id: string
+  reminder_id: string
+  channel: ChannelType
+  notify_id: string
+  status: ReminderStatus
+  fired_at: string | null
+  completed_at: string | null
+  failed_at: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  medication: string | null
+  scheduled_at: string | null
+}

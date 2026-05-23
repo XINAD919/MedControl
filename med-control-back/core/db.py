@@ -221,8 +221,7 @@ async def create_reminder(
     schedule: str,
     message: str,
     notes: str,
-    channel: str,
-    notify_id: str,
+    channels: list[dict],  # [{"channel": "telegram", "notify_id": "..."}]
     scheduled_at: str,
     metadata: Optional[dict] = None,
 ) -> str:
@@ -241,11 +240,25 @@ async def create_reminder(
         "schedule": schedule,
         "message": message,
         "notes": notes,
-        "channel": channel,
-        "notify_id": notify_id,
         "scheduled_at": scheduled_at,
         "metadata": metadata or {},
     }).execute()
+
+    if channels:
+        notif_rows = [
+            {
+                "reminder_id": reminder_id,
+                "user_id": user_id,
+                "channel": ch["channel"],
+                "notify_id": ch["notify_id"],
+                "status": "scheduled",
+            }
+            for ch in channels
+        ]
+        await client.table("reminder_notifications").upsert(
+            notif_rows, on_conflict="reminder_id,channel"
+        ).execute()
+
     return str(res.data[0]["id"])
 
 
@@ -367,4 +380,77 @@ async def get_user_documents(user_id: str) -> list[dict]:
         .order("uploaded_at", desc=True)
         .execute()
     )
+    return res.data or []
+
+
+# ============================================================================
+# Notificaciones de recordatorios
+# ============================================================================
+
+
+# ============================================================================
+# Adherencia
+# ============================================================================
+
+
+async def save_adherence_analysis(
+    user_id: str,
+    score: float,
+    metrics: dict,
+    llm_comment: str,
+    period_days: int = 30,
+) -> str:
+    client = get_supabase()
+    res = await client.table("adherence_analyses").insert({
+        "user_id": user_id,
+        "score": score,
+        "metrics": metrics,
+        "llm_comment": llm_comment,
+        "period_days": period_days,
+    }).execute()
+    return str(res.data[0]["id"])
+
+
+async def get_latest_adherence_analysis(user_id: str) -> Optional[dict]:
+    client = get_supabase()
+    res = await (
+        client.table("adherence_analyses")
+        .select("id, score, metrics, llm_comment, period_days, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .maybe_single()
+        .execute()
+    )
+    return res.data if res else None
+
+
+async def get_reminders_for_adherence(user_id: str, period_days: int = 30) -> list[dict]:
+    """Retorna recordatorios pasados dentro del período para calcular métricas."""
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=period_days)).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+    client = get_supabase()
+    res = await (
+        client.table("reminders")
+        .select("medication, scheduled_at, taken, taken_at, status")
+        .eq("user_id", user_id)
+        .gte("scheduled_at", since)
+        .lte("scheduled_at", now)
+        .order("scheduled_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+
+async def get_user_notifications(user_id: str, status: Optional[str] = None) -> list[dict]:
+    client = get_supabase()
+    q = (
+        client.table("reminder_notifications")
+        .select("id, reminder_id, channel, notify_id, status, fired_at, completed_at, failed_at, error_message, created_at, updated_at, reminders!fk_rn_reminder_id(medication, scheduled_at)")
+        .eq("user_id", user_id)
+    )
+    if status:
+        q = q.eq("status", status)
+    res = await q.order("created_at", desc=True).limit(200).execute()
     return res.data or []

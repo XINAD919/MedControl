@@ -46,9 +46,15 @@ session_store: dict[str, Agent] = {}
 
 
 async def get_or_create_agent(session_id: str, user_id: str) -> Agent:
-    if session_id not in session_store:
-        session_store[session_id] = Agent(session_id=session_id, user_id=user_id)
-        session_store[session_id]._charge_historial()
     from core import db
-    await db.get_or_create_session(user_id=user_id, session_id=session_id)
+    if session_id not in session_store:
+        agent = Agent(session_id=session_id, user_id=user_id)
+        session_store[session_id] = agent
+        await db.get_or_create_session(user_id=user_id, session_id=session_id)
+        db_messages = await db.load_messages(session_id)
+        if db_messages:
+            system_msg = agent.historial[0].copy()
+            agent.historial = [system_msg] + [m for m in db_messages if m["role"] != "system"]
+    else:
+        await db.get_or_create_session(user_id=user_id, session_id=session_id)
     return session_store[session_id]

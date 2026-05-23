@@ -20,7 +20,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ============================================================================
 
 DO $$ BEGIN
-  CREATE TYPE channel_type AS ENUM ('telegram', 'email', 'discord', 'webpush', 'sms');
+  CREATE TYPE channel_type AS ENUM ('telegram', 'email', 'discord', 'webpush', 'sms', 'whatsapp');
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
@@ -158,36 +158,72 @@ CREATE TABLE IF NOT EXISTS reminders (
   message TEXT NOT NULL,
   notes TEXT,
 
-  -- Canal y destino
-  channel channel_type NOT NULL,
-  notify_id VARCHAR(500) NOT NULL,
-  UNIQUE (reminder_id, channel),
-
   -- Timing
   scheduled_at TIMESTAMP NOT NULL,
-  fired_at TIMESTAMP,
-  completed_at TIMESTAMP,
-  failed_at TIMESTAMP,
 
-  -- Estado
+  -- Estado agregado (se sincroniza con reminder_notifications)
   status reminder_status DEFAULT 'scheduled',
-  error_message TEXT,
+
+  -- Toma del medicamento
+  taken    BOOLEAN   DEFAULT false,
+  taken_at TIMESTAMPTZ,
+
+  -- Recurrencia
+  is_recurring        BOOLEAN   DEFAULT false,
+  recurrence_type     VARCHAR(50),
+  recurrence_days     TEXT,
+  recurrence_interval INTEGER   DEFAULT 1,
+  recurrence_end_date TIMESTAMP,
 
   -- Metadata
   metadata JSONB DEFAULT '{}'::jsonb,
 
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  CONSTRAINT reminders_reminder_id_key UNIQUE (reminder_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_reminders_user_id ON reminders(user_id);
-CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);
-CREATE INDEX IF NOT EXISTS idx_reminders_scheduled_at ON reminders(scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_reminders_reminder_id ON reminders(reminder_id);
-CREATE INDEX IF NOT EXISTS idx_reminders_session_id ON reminders(session_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_user_id      ON reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_status        ON reminders(status);
+CREATE INDEX IF NOT EXISTS idx_reminders_scheduled_at  ON reminders(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_reminders_reminder_id   ON reminders(reminder_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_session_id    ON reminders(session_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_recurring
+  ON reminders(is_recurring) WHERE is_recurring = true;
 
-COMMENT ON TABLE reminders IS 'Recordatorios creados por el agente (persistencia de n8n)';
+COMMENT ON TABLE reminders IS 'Un recordatorio por dosis programada. La entrega por canal está en reminder_notifications.';
 COMMENT ON COLUMN reminders.metadata IS 'Datos extra de n8n, .ics generado, execution_id, etc.';
+
+-- ============================================================================
+-- Table: reminder_notifications
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS reminder_notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reminder_id VARCHAR(100) NOT NULL REFERENCES reminders(reminder_id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel     channel_type NOT NULL,
+  notify_id   VARCHAR(500) NOT NULL,
+
+  status        reminder_status DEFAULT 'scheduled',
+  fired_at      TIMESTAMP,
+  completed_at  TIMESTAMP,
+  failed_at     TIMESTAMP,
+  error_message TEXT,
+
+  metadata   JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  UNIQUE (reminder_id, channel)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rn_reminder_id ON reminder_notifications(reminder_id);
+CREATE INDEX IF NOT EXISTS idx_rn_user_id     ON reminder_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_rn_status      ON reminder_notifications(status);
+
+COMMENT ON TABLE reminder_notifications IS 'Entrega de un recordatorio por canal (fan-out). Una fila por (reminder_id, channel).';
 
 -- ============================================================================
 -- Table: documents
@@ -233,7 +269,7 @@ CREATE TABLE IF NOT EXISTS document_embeddings (
   chunk_text TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
 
-  embedding vector(768),  -- dimensión del modelo nomic-embed-text
+  embedding vector(512),  -- dimensión del modelo voyage-3-lite (Voyage AI)
 
   metadata JSONB DEFAULT '{}'::jsonb,
 
@@ -291,6 +327,11 @@ CREATE TRIGGER update_reminders_updated_at
   BEFORE UPDATE ON reminders
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_reminder_notifications_updated_at ON reminder_notifications;
+CREATE TRIGGER update_reminder_notifications_updated_at
+  BEFORE UPDATE ON reminder_notifications
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================================================
 -- Data de prueba (opcional, comentar si no se necesita)
 -- ============================================================================
@@ -308,7 +349,7 @@ ON CONFLICT (user_id, channel) DO NOTHING;
 
 -- Sesión de prueba
 INSERT INTO sessions (id, user_id, session_id, metadata) VALUES
-  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'default', '{"provider": "ollama", "model": "qwen2.5:32b"}'::jsonb)
+  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'default', '{"provider": "anthropic", "model": "claude-sonnet-4-6"}'::jsonb)
 ON CONFLICT (session_id) DO NOTHING;
 
 -- ============================================================================
@@ -324,11 +365,12 @@ SELECT
   r.medication,
   r.schedule,
   r.scheduled_at,
-  r.channel,
-  r.notify_id,
+  rn.channel,
+  rn.notify_id,
   EXTRACT(EPOCH FROM (r.scheduled_at - NOW())) / 60 AS minutes_until
 FROM reminders r
 JOIN users u ON u.id = r.user_id
+LEFT JOIN reminder_notifications rn ON rn.reminder_id = r.reminder_id
 WHERE r.status = 'scheduled'
   AND r.scheduled_at > NOW()
 ORDER BY r.scheduled_at ASC;
@@ -344,9 +386,9 @@ SELECT
   r.medication,
   r.schedule,
   r.scheduled_at,
-  r.fired_at,
+  MAX(rn.fired_at) AS fired_at,
   r.status,
-  r.channel,
+  array_agg(rn.channel ORDER BY rn.channel) AS channels,
   CASE
     WHEN r.status = 'completed' THEN 'Enviado'
     WHEN r.status = 'failed' THEN 'Falló'
@@ -356,6 +398,9 @@ SELECT
   END AS status_es
 FROM reminders r
 JOIN users u ON u.id = r.user_id
+LEFT JOIN reminder_notifications rn ON rn.reminder_id = r.reminder_id
+GROUP BY r.user_id, u.username, r.reminder_id, r.medication, r.schedule,
+         r.scheduled_at, r.status, r.created_at
 ORDER BY r.created_at DESC;
 
 COMMENT ON VIEW user_reminders_history IS 'Historial completo de recordatorios por usuario';
@@ -411,22 +456,12 @@ COMMENT ON FUNCTION cleanup_old_sessions IS 'Elimina sesiones sin actividad en 3
 -- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO medai_app;
 
 -- ============================================================================
--- Recurrence support (migration segura para containers existentes)
+-- Migration-safe: columnas adicionales para bases existentes
 -- ============================================================================
 
--- Auth: role column and unique email (migration-safe for existing containers)
+-- Auth: role column and unique email
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'USER';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL;
-
-ALTER TABLE reminders ADD COLUMN IF NOT EXISTS is_recurring        BOOLEAN   DEFAULT false;
-ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_type     VARCHAR(50);
-ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_days     TEXT;       -- JSON array '[1,3,5]' (0=Dom…6=Sab)
-ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER   DEFAULT 1;
-ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence_end_date TIMESTAMP;
-
-CREATE INDEX IF NOT EXISTS idx_reminders_recurring
-  ON reminders(is_recurring)
-  WHERE is_recurring = true;
 
 -- ============================================================================
 -- Finalización
@@ -459,16 +494,22 @@ END $$;
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_reminder_status(
-    p_reminder_id TEXT,
-    p_status TEXT,
+    p_reminder_id   TEXT,
+    p_status        TEXT,
     p_error_message TEXT DEFAULT NULL
 ) RETURNS VOID LANGUAGE sql AS $$
+    UPDATE reminder_notifications SET
+        status        = p_status::reminder_status,
+        fired_at      = CASE WHEN p_status = 'firing'    THEN NOW() ELSE fired_at     END,
+        completed_at  = CASE WHEN p_status = 'completed' THEN NOW() ELSE completed_at END,
+        failed_at     = CASE WHEN p_status = 'failed'    THEN NOW() ELSE failed_at    END,
+        error_message = COALESCE(p_error_message, error_message),
+        updated_at    = NOW()
+    WHERE reminder_id = p_reminder_id;
+
     UPDATE reminders SET
-        status       = p_status::reminder_status,
-        fired_at     = CASE WHEN p_status = 'firing'    THEN NOW() ELSE fired_at     END,
-        completed_at = CASE WHEN p_status = 'completed' THEN NOW() ELSE completed_at END,
-        failed_at    = CASE WHEN p_status = 'failed'    THEN NOW() ELSE failed_at    END,
-        error_message = COALESCE(p_error_message, error_message)
+        status     = p_status::reminder_status,
+        updated_at = NOW()
     WHERE reminder_id = p_reminder_id;
 $$;
 
@@ -487,32 +528,37 @@ CREATE OR REPLACE FUNCTION get_user_reminders_grouped(
     scheduled_at TIMESTAMPTZ,
     fired_at     TIMESTAMPTZ,
     created_at   TIMESTAMPTZ,
-    status       TEXT
+    status       TEXT,
+    taken        BOOLEAN,
+    taken_at     TIMESTAMPTZ
 ) LANGUAGE sql STABLE AS $$
     SELECT
-        reminder_id,
-        MIN(medication)::TEXT,
-        MIN(schedule)::TEXT,
-        MIN(message)::TEXT,
-        MIN(notes)::TEXT,
-        array_agg(channel::TEXT ORDER BY channel::TEXT),
-        MIN(scheduled_at),
-        MAX(fired_at),
-        MIN(created_at),
-        CASE
-            WHEN bool_or(status = 'scheduled') THEN 'scheduled'
-            WHEN bool_or(status = 'firing')    THEN 'firing'
-            WHEN bool_or(status = 'failed')    THEN 'failed'
-            WHEN bool_or(status = 'completed') THEN 'completed'
-            ELSE 'cancelled'
-        END
-    FROM reminders
-    WHERE user_id = p_user_id
-      AND (p_status     IS NULL OR status = p_status::reminder_status)
-      AND (p_date       IS NULL OR scheduled_at::date = p_date)
-      AND (p_medication IS NULL OR medication ILIKE '%' || p_medication || '%')
-    GROUP BY reminder_id
-    ORDER BY MIN(scheduled_at) DESC
+        r.reminder_id,
+        r.medication,
+        r.schedule,
+        r.message,
+        r.notes,
+        COALESCE(
+            array_agg(rn.channel::TEXT ORDER BY rn.channel::TEXT)
+              FILTER (WHERE rn.channel IS NOT NULL),
+            '{}'::TEXT[]
+        ),
+        r.scheduled_at,
+        MAX(rn.fired_at),
+        r.created_at,
+        r.status::TEXT,
+        r.taken,
+        r.taken_at
+    FROM reminders r
+    LEFT JOIN reminder_notifications rn ON rn.reminder_id = r.reminder_id
+    WHERE r.user_id = p_user_id
+      AND (p_status     IS NULL OR r.status = p_status::reminder_status)
+      AND (p_date       IS NULL OR r.scheduled_at::date = p_date)
+      AND (p_medication IS NULL OR r.medication ILIKE '%' || p_medication || '%')
+    GROUP BY
+        r.reminder_id, r.medication, r.schedule, r.message, r.notes,
+        r.scheduled_at, r.created_at, r.status, r.taken, r.taken_at
+    ORDER BY r.scheduled_at DESC
     LIMIT 100;
 $$;
 

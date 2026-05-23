@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useSession } from 'next-auth/react'
 import { connectChatSocket, uploadDocument } from '../lib/api'
 import type { ChatMessage, UploadStatus } from '../lib/types'
@@ -28,7 +29,7 @@ function AssistantBubble({ content, streaming }: { content: string; streaming?: 
       </div>
       <div className="max-w-[75%] bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 text-sm shadow-sm border border-blue-50 leading-relaxed">
         {content ? (
-          <div className="md-prose"><ReactMarkdown>{content}</ReactMarkdown></div>
+          <div className="md-prose"><ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown></div>
         ) : streaming ? (
           <span className="flex gap-1 items-center h-4">
             <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:0ms]" />
