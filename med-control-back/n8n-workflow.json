@@ -1,5 +1,5 @@
 {
-  "name": "MedAI –  Multi-Channel Reminder System",
+  "name": "MedAI – Multi-Channel Reminder System",
   "nodes": [
     {
       "parameters": {
@@ -8,13 +8,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "47e8e68f-baba-4af7-b61b-0e83be7c5459",
+      "id": "40246a15-0739-4dec-9070-2324cff58674",
       "name": "Webhook Entry",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -2208,
-        912
+        11056,
+        5792
       ],
       "webhookId": "medai-reminder-webhook"
     },
@@ -23,199 +23,101 @@
         "assignments": {
           "assignments": [
             {
-              "id": "a1",
+              "id": "f1",
+              "name": "reminder_id",
+              "value": "={{ $json.body.reminder_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
               "name": "user_id",
               "value": "={{ $json.body.user_id }}",
               "type": "string"
             },
             {
-              "id": "a2",
-              "name": "session_id",
-              "value": "={{ $json.body.session_id || $json.body.user_id }}",
-              "type": "string"
-            },
-            {
-              "id": "a3",
-              "name": "reminder_id",
-              "value": "={{ $json.body.reminder_id || 'rem_' + Date.now() }}",
-              "type": "string"
-            },
-            {
-              "id": "a4",
+              "id": "f3",
               "name": "medication",
               "value": "={{ $json.body.medication }}",
               "type": "string"
             },
             {
-              "id": "a5",
-              "name": "schedule",
-              "value": "={{ $json.body.schedule }}",
-              "type": "string"
-            },
-            {
-              "id": "a6",
+              "id": "f4",
               "name": "message",
               "value": "={{ $json.body.message }}",
               "type": "string"
             },
             {
-              "id": "a7",
+              "id": "f5",
               "name": "notes",
               "value": "={{ $json.body.notes || '' }}",
               "type": "string"
             },
             {
-              "id": "a8",
+              "id": "f6",
               "name": "channel",
-              "value": "={{ $json.body.channel || 'telegram' }}",
+              "value": "={{ $json.body.channel }}",
               "type": "string"
             },
             {
-              "id": "a9",
+              "id": "f7",
               "name": "notify_id",
               "value": "={{ $json.body.notify_id }}",
               "type": "string"
             },
             {
-              "id": "a10",
-              "name": "delay_minutes",
-              "value": "={{ $json.body.delay_minutes || 0 }}",
-              "type": "number"
-            },
-            {
-              "id": "a11",
-              "name": "created_at",
-              "value": "={{ $now.toISO() }}",
+              "id": "f8",
+              "name": "scheduled_at",
+              "value": "={{ $json.body.scheduled_at }}",
               "type": "string"
             },
             {
-              "id": "a12",
-              "name": "onesignal_app_id",
-              "value": "={{ $json.body.onesignal_app_id || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "a13",
-              "name": "discord_webhook_url",
-              "value": "={{ $json.body.discord_webhook_url || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "a14",
-              "name": "is_recurring",
-              "value": "={{ !!$json.body.recurrence_type }}",
-              "type": "boolean"
-            },
-            {
-              "id": "a15",
-              "name": "recurrence_type",
-              "value": "={{ $json.body.recurrence_type || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "a16",
-              "name": "recurrence_days",
-              "value": "={{ typeof $json.body.recurrence_days === 'string' ? $json.body.recurrence_days : JSON.stringify($json.body.recurrence_days || []) }}",
-              "type": "string"
-            },
-            {
-              "id": "a17",
-              "name": "recurrence_interval",
-              "value": "={{ $json.body.recurrence_interval || 1 }}",
-              "type": "number"
-            },
-            {
-              "id": "a18",
-              "name": "recurrence_end_date",
-              "value": "={{ $json.body.recurrence_end_date || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "a19",
-              "name": "n8n_webhook_url",
-              "value": "={{ $json.webhookUrl || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "a20",
-              "name": "channels",
-              "value": "={{ typeof $json.body.channels === 'string' ? $json.body.channels : JSON.stringify($json.body.channels || []) }}",
-              "type": "string"
+              "id": "f9",
+              "name": "metadata",
+              "value": "={{ $json.body.metadata || {} }}",
+              "type": "object"
             }
           ]
         },
         "options": {}
       },
-      "id": "54310ea3-071a-4107-be95-03c084be9544",
-      "name": "Normalize Input",
+      "id": "82dff515-50d5-494d-b39a-092e206c983c",
+      "name": "Extract Fields",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "typeVersion": 3.4,
       "position": [
-        -1984,
-        912
+        11264,
+        5792
       ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "WITH ins AS (\n  INSERT INTO reminders (\n    reminder_id, user_id, session_id,\n    medication, schedule, message, notes,\n    channel, notify_id, scheduled_at, status, created_at,\n    is_recurring, recurrence_type, recurrence_days, recurrence_interval, recurrence_end_date\n  )\n  VALUES (\n    '{{ $json.reminder_id }}',\n    '{{ $json.user_id }}'::uuid,\n    (SELECT id FROM sessions WHERE session_id = '{{ $json.session_id }}' LIMIT 1),\n    '{{ $json.medication }}',\n    '{{ $json.schedule }}',\n    '{{ $json.message }}',\n    NULLIF('{{ $json.notes }}', ''),\n    '{{ $json.channel }}'::channel_type,\n    '{{ $json.notify_id }}',\n    (TIMESTAMPTZ '{{ $json.created_at }}' + INTERVAL '1 minute' * {{ $json.delay_minutes }}),\n    'scheduled',\n    NOW(),\n    {{ $json.is_recurring }},\n    NULLIF('{{ $json.recurrence_type }}', ''),\n    NULLIF('{{ $json.recurrence_days }}', ''),\n    {{ $json.recurrence_interval }},\n    NULLIF('{{ $json.recurrence_end_date }}', '')::TIMESTAMP\n  )\n  ON CONFLICT (reminder_id, channel) DO NOTHING\n)\nSELECT\n  '{{ $json.reminder_id }}'          AS reminder_id,\n  '{{ $json.user_id }}'              AS user_id,\n  '{{ $json.session_id }}'           AS session_id,\n  '{{ $json.medication }}'           AS medication,\n  '{{ $json.schedule }}'             AS schedule,\n  '{{ $json.message }}'              AS message,\n  '{{ $json.notes }}'                AS notes,\n  '{{ $json.channel }}'              AS channel,\n  '{{ $json.notify_id }}'            AS notify_id,\n  {{ $json.delay_minutes }}::int     AS delay_minutes,\n  '{{ $json.created_at }}'           AS created_at,\n  '{{ $json.onesignal_app_id }}'     AS onesignal_app_id,\n  '{{ $json.discord_webhook_url }}'  AS discord_webhook_url,\n  {{ $json.is_recurring }}           AS is_recurring,\n  '{{ $json.recurrence_type }}'      AS recurrence_type,\n  '{{ $json.recurrence_days }}'      AS recurrence_days,\n  {{ $json.recurrence_interval }}    AS recurrence_interval,\n  '{{ $json.recurrence_end_date }}'  AS recurrence_end_date,\n  '{{ $json.n8n_webhook_url }}'      AS n8n_webhook_url",
-        "options": {}
-      },
-      "id": "5573a638-4fc1-4be1-bcff-61b67916958d",
-      "name": "Save to Database",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        -2208,
-        176
-      ],
-      "disabled": true,
-      "notes": "skipOnConflict=true: el fan-out envía N calls con el mismo reminder_id, solo el primero inserta"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'scheduled', reminder_id:$('Normalize Input').item.json.reminder_id , scheduled_at: new Date(new Date($json.created_at).getTime() + $('Normalize Input').item.json.delay_minutes * 60000).toISOString() }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'received', reminder_id: $json.reminder_id }) }}",
         "options": {
           "responseCode": 200
         }
       },
-      "id": "d4513c9f-480a-46d4-81dd-215d1917ecbb",
+      "id": "c541de61-24ba-465a-b0f6-e7bb022200f0",
       "name": "Respond 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        -1088,
-        912
+        11488,
+        5792
       ]
     },
     {
       "parameters": {
-        "jsCode": "// ── Generate .ics calendar file ──────────────────────────────\nconst data = $input.first().json;\nconst dataFromParseData = $(\"Parse Data\").first().json;\n// Calculate event start\nconst startDate = new Date(\n  new Date(data.created_at).getTime() + dataFromParseData.delay_minutes * 60 * 1000,\n);\nconst endDate = new Date(startDate.getTime() + 15 * 60 * 1000);\n\nconst formatDate = (d) =>\n  d.toISOString().replace(/[-:]/g, \"\").split(\".\")[0] + \"Z\";\n\nconst uid = `medai-${data.reminder_id}@medai.local`;\n\nconst icsLines = [\n  \"BEGIN:VCALENDAR\",\n  \"VERSION:2.0\",\n  \"PRODID:-//MedAI//Medication Reminder//ES\",\n  \"CALSCALE:GREGORIAN\",\n  \"METHOD:PUBLISH\",\n  \"BEGIN:VEVENT\",\n  `UID:${uid}`,\n  `DTSTAMP:${formatDate(new Date())}`,\n  `DTSTART:${formatDate(startDate)}`,\n  `DTEND:${formatDate(endDate)}`,\n  `SUMMARY:💊 ${data.medication}`,\n  `DESCRIPTION:${data.message}\\\\n\\\\nNotas: ${data.notes}`,\n  \"BEGIN:VALARM\",\n  \"TRIGGER:-PT0M\",\n  \"ACTION:DISPLAY\",\n  `DESCRIPTION:${data.message}`,\n  \"END:VALARM\",\n  \"END:VEVENT\",\n  \"END:VCALENDAR\",\n];\n\nconst icsContent = icsLines.join(\"\\r\\n\");\nconst buffer = Buffer.from(icsContent, \"utf8\");\nconst binaryData = await this.helpers.prepareBinaryData(\n  buffer,\n  `${data.medication.replace(/\\s+/g, \"_\")}.ics`,\n  \"text/calendar\",\n);\n\nreturn { json: { ...data, channels: dataFromParseData.channels || '[]' }, binary: { ics: binaryData } };\n"
+        "jsCode": "// ── Generate .ics calendar file ──────────────────────────────\nconst data = $input.first().json;\n// scheduled_at comes directly from the scheduler payload\nconst startDate = new Date(data.scheduled_at);\nconst endDate = new Date(startDate.getTime() + 15 * 60 * 1000);\n\nconst formatDate = (d) =>\n  d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';\n\nconst uid = `medai-${data.reminder_id}@medai.local`;\n\nconst icsLines = [\n  'BEGIN:VCALENDAR',\n  'VERSION:2.0',\n  'PRODID:-//MedAI//Medication Reminder//ES',\n  'CALSCALE:GREGORIAN',\n  'METHOD:PUBLISH',\n  'BEGIN:VEVENT',\n  `UID:${uid}`,\n  `DTSTAMP:${formatDate(new Date())}`,\n  `DTSTART:${formatDate(startDate)}`,\n  `DTEND:${formatDate(endDate)}`,\n  `SUMMARY:💊 ${data.medication}`,\n  `DESCRIPTION:${data.message}\\\\n\\\\nNotas: ${data.notes || ''}`,\n  'BEGIN:VALARM',\n  'TRIGGER:-PT0M',\n  'ACTION:DISPLAY',\n  `DESCRIPTION:${data.message}`,\n  'END:VALARM',\n  'END:VEVENT',\n  'END:VCALENDAR',\n];\n\nconst icsContent = icsLines.join('\\r\\n');\nconst buffer = Buffer.from(icsContent, 'utf8');\nconst binaryData = await this.helpers.prepareBinaryData(\n  buffer,\n  `${data.medication.replace(/\\s+/g, '_')}.ics`,\n  'text/calendar',\n);\n\nreturn { json: { ...data }, binary: { ics: binaryData } };\n"
       },
-      "id": "9a869ff0-a7a9-48e7-bf4c-86c7fa8d17d6",
+      "id": "239caa33-aa5b-4f21-8fad-f71b41a02424",
       "name": "Generate .ics File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -864,
-        912
+        11712,
+        5792
       ]
-    },
-    {
-      "parameters": {
-        "amount": "={{ $('Parse Data').item.json.delay_minutes }}",
-        "unit": "minutes"
-      },
-      "id": "5803ff66-0fd2-4d7b-95cf-92fddb7befd9",
-      "name": "Wait Until Scheduled Time",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        -640,
-        912
-      ],
-      "webhookId": "medai-wait-webhook"
     },
     {
       "parameters": {
@@ -346,32 +248,32 @@
         },
         "options": {}
       },
-      "id": "c19331b4-e9dc-46dc-8cc9-2d86f92861ac",
+      "id": "b02d7031-6edf-4573-b407-caa5648dbee7",
       "name": "Switch Channel",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.1,
       "position": [
-        -192,
-        880
+        11936,
+        5792
       ]
     },
     {
       "parameters": {
         "chatId": "={{ $json.notify_id }}",
-        "text": "=🔔 *Recordatorio de Medicación*\n\n💊 *{{ $json.medication }}*\n🕐 Hora: {{ $json.schedule }}\n\n{{ $json.message }}\n\n{{ $json.notes ? '_' + $json.notes + '_' : '' }}",
+        "text": "=🔔 *Recordatorio de Medicación*\n\n💊 *{{ $json.medication }}*\n🕐 Hora: {{ $json.scheduled_at }}\n\n{{ $json.message }}\n\n{{ $json.notes ? '_' + $json.notes + '_' : '' }}",
         "additionalFields": {
           "appendAttribution": false,
           "disable_notification": false,
           "parse_mode": "Markdown"
         }
       },
-      "id": "6e23208f-5be8-4c1d-b04c-d6088ce92bc0",
+      "id": "0eabf5d2-2819-4b48-866a-4ba4d53dea25",
       "name": "Send Telegram Message",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -32,
-        528
+        12144,
+        5392
       ],
       "webhookId": "65119d3b-e3e3-4449-ab67-83e274234470",
       "credentials": {
@@ -383,6 +285,19 @@
     },
     {
       "parameters": {
+        "jsCode": "// Re-inject .ics binary from Generate .ics File\nconst icsData = $('Generate .ics File').first().binary?.ics;\nconst currentJson = $input.first().json;\n\nreturn [{\n  json: currentJson,\n  binary: icsData ? { ics: icsData } : {}\n}];"
+      },
+      "id": "f9430dec-4640-4f11-accf-ef8144ab2a33",
+      "name": "Attach .ics to Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12368,
+        5392
+      ]
+    },
+    {
+      "parameters": {
         "operation": "sendDocument",
         "chatId": "={{ $json.notify_id }}",
         "binaryData": true,
@@ -391,13 +306,13 @@
           "caption": "📅 Guarda este evento en tu calendario"
         }
       },
-      "id": "809f8c69-08b4-4c4f-bafb-f532fd03dcee",
+      "id": "265230c7-5855-459b-9e75-96b2d8a6c619",
       "name": "Send Telegram .ics",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        416,
-        528
+        12592,
+        5392
       ],
       "webhookId": "e806f19a-5538-4465-9f1b-b85ed79fd104",
       "credentials": {
@@ -406,6 +321,19 @@
           "name": "Telegram account"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Re-inject .ics binary from Generate .ics File\nconst icsData = $('Generate .ics File').first().binary?.ics;\nconst currentJson = $input.first().json;\n\nreturn [{\n  json: currentJson,\n  binary: icsData ? { ics: icsData } : {}\n}];"
+      },
+      "id": "737a5f03-ab58-40e1-beb8-6086ee4ea0e2",
+      "name": "Attach .ics to Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12144,
+        5600
+      ]
     },
     {
       "parameters": {
@@ -420,13 +348,13 @@
           "allowUnauthorizedCerts": false
         }
       },
-      "id": "94a4b686-465f-4835-9074-2a228eee1fea",
+      "id": "fe42da93-b14b-4cf6-9246-16b3c9c8b622",
       "name": "Send Email + .ics",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        416,
-        720
+        12368,
+        5600
       ],
       "webhookId": "f173212c-5e03-42b3-b544-8d4242923c66",
       "credentials": {
@@ -435,35 +363,37 @@
           "name": "SMTP account"
         }
       },
-      "notes": "Usa Gmail SMTP (587) o Resend.com API. Ver documentación para configurar."
+      "notes": "Usa Gmail SMTP (587) o Resend.com API."
     },
     {
       "parameters": {
-        "url": "={{ $json.discord_webhook_url || $('Webhook Entry').first().json.discord_webhook_url }}",
+        "url": "={{ $json.metadata?.webhook_url || '' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  content: '<@' + $json.notify_id + '>',\n  embeds: [{\n    title: '💊 Recordatorio de Medicación',\n    description: '**' + $json.medication + '**',\n    color: 5763719,\n    fields: [\n      { name: '🕐 Hora', value: $json.schedule, inline: true },\n      { name: '📝 Mensaje', value: $json.message, inline: false }\n    ],\n    footer: { text: 'MedAI - Tu asistente de medicación' },\n    timestamp: new Date().toISOString()\n  }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  content: '<@' + $json.notify_id + '>',\n  embeds: [{\n    title: '💊 Recordatorio de Medicación',\n    description: '**' + $json.medication + '**',\n    color: 5763719,\n    fields: [\n      { name: '🕐 Hora', value: $json.scheduled_at, inline: true },\n      { name: '📝 Mensaje', value: $json.message, inline: false }\n    ],\n    footer: { text: 'MedAI - Tu asistente de medicación' },\n    timestamp: new Date().toISOString()\n  }]\n}) }}",
         "options": {}
       },
-      "id": "b0755b76-9c19-4d02-a47e-7ce534e875c1",
+      "id": "603c2968-ac68-45ba-a53b-432b99eb180f",
       "name": "Send Discord Notification",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        416,
-        912
+        12144,
+        5792
       ],
-      "notes": "El usuario debe configurar su webhook de Discord y pasarlo en discord_webhook_url"
+      "notes": "discord_webhook_url viene en metadata.webhook_url del canal"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://onesignal.com/api/v1/notifications",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "oneSignalApi",
+        "url": "https://api.onesignal.com/notifications?c=push",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
+            {
+              "name": "Authorization",
+              "value": "os_v2_app_ey2uoitthbfrro24mqeax2weia7jeohgvsaeq2fm4zgztqvy2h44mgpllxeczrsmvyhkhnybbhtgwc32chonnffy5yu2dpxsdpovuii"
+            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -472,538 +402,18 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  app_id: $json.onesignal_app_id || 'YOUR_ONESIGNAL_APP_ID',\n  include_external_user_ids: [$json.user_id],\n  headings: { en: '💊 Recordatorio de Medicación' },\n  contents: { en: $json.medication + ' - ' + $json.message },\n  data: {\n    type: 'medication_reminder',\n    reminder_id: $json.reminder_id,\n    medication: $json.medication\n  },\n  web_url: 'https://tudominio.com/reminders/' + $json.reminder_id\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  app_id: '26354722-7338-4b18-bb5c-64080beac440',\n  contents: { en: $json.medication + ' - ' + $json.message },\n  include_aliases: { external_id: [$json.notify_id] },\n  target_channel: 'push',\n  headings: { en: '💊 Recordatorio de Medicación' },\n  data: {\n    type: 'medication_reminder',\n    reminder_id: $json.reminder_id,\n    medication: $json.medication\n  },\n  web_url: 'http://localhost:3000/notifications'\n}) }}",
         "options": {}
       },
-      "id": "321ffc2c-6837-4fdc-b797-9274aca7afbf",
+      "id": "06205787-b1e0-476b-8694-413a8f3edb30",
       "name": "Send Web Push (OneSignal)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        416,
-        1104
+        12144,
+        6000
       ],
-      "notes": "Gratis hasta 10,000 suscriptores. Configura en onesignal.com"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://172.24.66.234:8080/webhooks/n8n",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Api-Key",
-              "value": "MEDAINOTIFICATIONSECRET"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  event: 'reminder.fired',\n  data: {\n    reminder_id: $('Wait Until Scheduled Time').item.json.reminder_id,\n    user_id: $('Wait Until Scheduled Time').item.json.user_id,\n    session_id: $('Wait Until Scheduled Time').item.json.session_id,\n    medication: $('Wait Until Scheduled Time').item.json.medication,\n    schedule: $('Wait Until Scheduled Time').item.json.schedule,\n    channel: 'all',\n    fired_at: $now.toISO()\n  }\n}) }}",
-        "options": {
-          "timeout": 5000
-        }
-      },
-      "id": "203d619b-2ab8-4d26-b819-5b32ecc9aa65",
-      "name": "Callback to Backend",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        704,
-        912
-      ],
-      "notes": "Notifica al backend FastAPI que el recordatorio fue enviado"
-    },
-    {
-      "parameters": {},
-      "id": "bf3d98c2-c152-40a8-893c-fc6c0a269af1",
-      "name": "On Error",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [
-        -2208,
-        1424
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://localhost:8000/webhooks/n8n",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  event: 'reminder.failed',\n  data: {\n    reminder_id: $json.reminder_id,\n    user_id: $json.user_id,\n    error: $json.error.message,\n    failed_at: $now.toISO()\n  }\n}) }}",
-        "options": {}
-      },
-      "id": "35d9681b-af95-409d-aa3e-336a73f4e036",
-      "name": "Notify Backend of Error",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        -1536,
-        1424
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Error Trigger  has no reminder_id from original payload.\n// Extract what we can; stop execution if reminder_id is unavailable.\nconst execution =  $input.first().json.execution || {};\nconst reminderId = $json.reminder_id || null;\n\nif (!reminderId) {\n  // No way to identify which reminder failed — skip DB update\n  return [];\n}\n\nreturn [{\n  json: {\n    reminder_id: reminderId,\n    error_message: execution.error?.message || $json.error?.message || 'Unknown error'\n  }\n}];"
-      },
-      "id": "44f78451-c5f0-4bc9-9b5f-22d728bb2de3",
-      "name": "Extract Error Context",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -1984,
-        1424
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Re-inject .ics binary (lost after executeQuery in Update Status node)\nconst icsData = $('Generate .ics File').first().binary?.ics;\nconst currentJson = $input.first().json;\n\nreturn [{\n  json: currentJson,\n  binary: icsData ? { ics: icsData } : {}\n}];"
-      },
-      "id": "bc63d96b-d7ff-41ca-ab87-7ebe3c7d2897",
-      "name": "Attach .ics to Email",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        192,
-        720
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Re-inject .ics binary (lost after executeQuery in Update Status node)\nconst icsData = $('Generate .ics File').first().binary?.ics;\nconst currentJson = $input.first().json;\n\nreturn [{\n  json: currentJson,\n  binary: icsData ? { ics: icsData } : {}\n}];"
-      },
-      "id": "e6a42746-0d24-492c-8a9c-f5aef15323b8",
-      "name": "Attach .ics to Telegram",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        192,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "cond-is-recurring",
-              "leftValue": "={{ $('Wait Until Scheduled Time').item.json.is_recurring }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "cond-end-date",
-              "leftValue": "={{ new Date($('Wait Until Scheduled Time').item.json.recurrence_end_date) > new Date() }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "cond-primary-channel",
-              "leftValue": "={{ $json.channel }}",
-              "rightValue": "webpush",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "c0d2da3f-4d79-4394-8ee0-e922785c7afc",
-      "name": "Check if Recurring",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1152,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const data = $('Wait Until Scheduled Time').first().json;\nconst scheduledAt = new Date(new Date(data.created_at).getTime() + data.delay_minutes * 60000);\nconst endDate = new Date(data.recurrence_end_date);\nconst now = new Date();\nlet nextDate = new Date(scheduledAt);\n\nswitch (data.recurrence_type) {\n  case 'daily':\n    nextDate.setDate(nextDate.getDate() + 1);\n    break;\n  case 'weekly': {\n    const days = JSON.parse(data.recurrence_days || '[]');\n    nextDate.setDate(nextDate.getDate() + 1);\n    let safety = 0;\n    while (!days.includes(nextDate.getDay()) && safety++ < 8) nextDate.setDate(nextDate.getDate() + 1);\n    break;\n  }\n  case 'weekdays':\n    nextDate.setDate(nextDate.getDate() + 1);\n    while ([0,6].includes(nextDate.getDay())) nextDate.setDate(nextDate.getDate() + 1);\n    break;\n  case 'weekends':\n    nextDate.setDate(nextDate.getDate() + 1);\n    while (![0,6].includes(nextDate.getDay())) nextDate.setDate(nextDate.getDate() + 1);\n    break;\n  case 'monthly':\n    nextDate.setMonth(nextDate.getMonth() + 1);\n    break;\n  case 'interval_days':\n    nextDate.setDate(nextDate.getDate() + (data.recurrence_interval || 1));\n    break;\n  case 'interval_hours':\n    nextDate = new Date(scheduledAt.getTime() + (data.recurrence_interval || 1) * 3600000);\n    break;\n  default:\n    return [{ json: { should_requeue: false } }];\n}\n\nif (nextDate > endDate) return [{ json: { should_requeue: false } }];\n\nconst delayMinutes = Math.max(1, Math.floor((nextDate.getTime() - now.getTime()) / 60000));\nconst newReminderId = 'rem_' + Math.floor(nextDate.getTime() / 1000);\n\nreturn [{ json: { ...data, channels: data.channels || '[]', reminder_id: newReminderId, delay_minutes: delayMinutes, created_at: now.toISOString(), should_requeue: true } }];"
-      },
-      "id": "d1d32b10-6b2f-410a-854d-7b94ec30b20e",
-      "name": "Calculate Next Occurrence",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1376,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "cond-sr",
-              "leftValue": "={{ $json.should_requeue }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "50bb9b2d-05f5-46e4-abb4-1164fc17c5cc",
-      "name": "Should Requeue?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1600,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $('Parse Data').item.json.n8n_webhook_url }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "id": "545f1262-e90c-4176-80c1-d1c1d903cab3",
-      "name": "Re-queue Reminder",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1824,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "tableId": "reminders",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "reminder_id",
-              "fieldValue": "={{ $json.reminder_id }}"
-            },
-            {
-              "fieldId": "user_id",
-              "fieldValue": "={{ $json.user_id }}"
-            },
-            {
-              "fieldId": "session_id",
-              "fieldValue": "={{ $json.session_id }}"
-            },
-            {
-              "fieldId": "medication",
-              "fieldValue": "={{ $json.medication }}"
-            },
-            {
-              "fieldId": "schedule",
-              "fieldValue": "={{ $json.schedule }}"
-            },
-            {
-              "fieldId": "message",
-              "fieldValue": "={{ $json.message }}"
-            },
-            {
-              "fieldId": "notes",
-              "fieldValue": "={{ $json.notes }}"
-            },
-            {
-              "fieldId": "channel",
-              "fieldValue": "={{ $json.channel }}"
-            },
-            {
-              "fieldId": "notify_id",
-              "fieldValue": "={{ $json.notify_id }}"
-            },
-            {
-              "fieldId": "scheduled_at",
-              "fieldValue": "={{ $json.scheduled_at }}"
-            },
-            {
-              "fieldId": "is_recurring",
-              "fieldValue": "={{ $json.is_recurring }}"
-            },
-            {
-              "fieldId": "recurrence_type",
-              "fieldValue": "={{ $json.recurrence_type }}"
-            },
-            {
-              "fieldId": "recurrence_days",
-              "fieldValue": "={{ $json.recurrence_days }}"
-            },
-            {
-              "fieldId": "recurrence_interval",
-              "fieldValue": "={{ $json.recurrence_interval }}"
-            },
-            {
-              "fieldId": "recurrence_end_date",
-              "fieldValue": "={{ $json.recurrence_end_date }}"
-            },
-            {
-              "fieldId": "status",
-              "fieldValue": "={{ $json.status }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -1312,
-        912
-      ],
-      "id": "f9fac811-c8d7-4aee-b4b8-e75ba9dd398a",
-      "name": "Create a row",
-      "credentials": {
-        "supabaseApi": {
-          "id": "2mVvcanszl8xPZ3D",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const createdAt = new Date($(\"Normalize Input\").first().json.created_at);\nconst scheduled_at = new Date(\n  createdAt.getTime() + 60 * $(\"Normalize Input\").first().json.delay_minutes,\n);\n\nconst notes =\n  $(\"Normalize Input\").first().json.notes === \"\"\n    ? null\n    : $(\"Normalize Input\").first().json.notes;\n\nconst recurrence_type =\n  $(\"Normalize Input\").first().json.recurrence_type === \"\"\n    ? null\n    : $(\"Normalize Input\").first().json.recurrence_type;\n\nconst recurrence_end_date =\n  $(\"Normalize Input\").first().json.recurrence_end_date === \"\"\n    ? null\n    : $(\"Normalize Input\").first().json.recurrence_end_date;\n\nconst recurrence_days =\n  $(\"Normalize Input\").first().json.recurrence_days === \"[]\"\n    ? null\n    : $(\"Normalize Input\").first().json.recurrence_days;\n\nreturn {\n  ...$(\"Normalize Input\").first().json,\n  scheduled_at,\n  session_id: $input.first().json.id,\n  status: \"scheduled\",\n  notes,\n  recurrence_type,\n  recurrence_end_date,\n  recurrence_days,\n};\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -1536,
-        912
-      ],
-      "id": "9331e6ad-bd36-4a71-86f4-ce85b0ae00e3",
-      "name": "Parse Data"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE reminders SET status = 'firing', fired_at = NOW() WHERE reminder_id = '{{ $json.reminder_id }}'",
-        "options": {}
-      },
-      "id": "da561fc1-523a-428d-80b2-dc906b48b4bf",
-      "name": "Update Status → Firing pg",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        -2208,
-        400
-      ],
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "reminders",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "reminder_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.reminder_id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "status",
-              "fieldValue": "firing"
-            },
-            {
-              "fieldId": "fired_at",
-              "fieldValue": "={{$now.toISO();}}\n"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -416,
-        912
-      ],
-      "id": "9d5a8060-a315-46f0-8956-c2484f7a795f",
-      "name": "Update Status → Firing",
-      "credentials": {
-        "supabaseApi": {
-          "id": "2mVvcanszl8xPZ3D",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE reminders SET status = 'completed', completed_at = NOW() WHERE reminder_id = '{{ $json.reminder_id }}'",
-        "options": {}
-      },
-      "id": "7178ae32-db7a-4802-abbf-7baa5a4a7966",
-      "name": "Update Status → Completed pg",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        -2208,
-        -48
-      ],
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "reminders",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "reminder_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Wait Until Scheduled Time').item.json.reminder_id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "status",
-              "fieldValue": "completed"
-            },
-            {
-              "fieldId": "completed_at",
-              "fieldValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        928,
-        912
-      ],
-      "id": "cd1d7c18-31a2-4cfd-8ec3-8d6b6d1c759b",
-      "name": "Update Status → Completed",
-      "credentials": {
-        "supabaseApi": {
-          "id": "2mVvcanszl8xPZ3D",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE reminders SET status = 'failed', error_message = '{{ $json.error?.message || \"Unknown error\" }}', failed_at = NOW() WHERE reminder_id = '{{ $json.reminder_id }}'",
-        "options": {}
-      },
-      "id": "2d33fe3d-b256-4db1-a3b7-6bd7e3c54253",
-      "name": "Mark as Failed in DB pg",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        -2208,
-        1648
-      ],
-      "disabled": true
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "reminders",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "reminder_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.reminder_id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "status",
-              "fieldValue": "failed"
-            },
-            {
-              "fieldId": "error_message",
-              "fieldValue": "={{ $json.error?.message || \"Unknown error\" }}"
-            },
-            {
-              "fieldId": "failed_at",
-              "fieldValue": "{{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -1760,
-        1424
-      ],
-      "id": "8f6515d3-da11-46a3-b312-8b4acce47b65",
-      "name": "Mark as Failed in DB",
-      "credentials": {
-        "supabaseApi": {
-          "id": "2mVvcanszl8xPZ3D",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "get",
-        "tableId": "sessions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "session_id",
-              "keyValue": "={{ $json.session_id }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -1760,
-        912
-      ],
-      "id": "3b8e48d0-b9ea-4b97-864d-1c57e23dfda9",
-      "name": "Get a row",
-      "credentials": {
-        "supabaseApi": {
-          "id": "2mVvcanszl8xPZ3D",
-          "name": "Supabase account"
-        }
-      }
+      "notes": "Reemplazar OS_REST_API_KEY_AQUI con la REST API Key de OneSignal Dashboard → Settings → Keys & IDs. notify_id = user_id (external_id en OneSignal)."
     },
     {
       "parameters": {
@@ -1030,101 +440,65 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        416,
-        1312
+        12144,
+        6192
       ],
-      "id": "6cba133b-d940-4dc7-8cb3-7ac46b12f40e",
+      "id": "c41d0e3c-b60a-4df0-9825-3dfc13405741",
       "name": "HTTP Request"
     },
     {
       "parameters": {
-        "jsCode": "const base = $input.first().json;\n// 'channels' no es columna de DB — sobrevive en Generate .ics File pero se pierde en Update Status → Firing.\n// Leerlo desde el nodo que lo preservó explícitamente.\nconst raw = $('Generate .ics File').first().json.channels || base.channels;\nlet channels;\ntry {\n  channels = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);\n} catch(e) { channels = []; }\nif (!channels.length) {\n  channels = [{ channel: base.channel || 'webpush', notify_id: base.notify_id || base.user_id, onesignal_app_id: '', discord_webhook_url: '' }];\n}\nreturn channels.map(ch => ({\n  json: { ...base, channel: ch.channel, notify_id: ch.notify_id, onesignal_app_id: ch.onesignal_app_id || '', discord_webhook_url: ch.discord_webhook_url || '' },\n  binary: $('Generate .ics File').first().binary || {}\n}));"
+        "method": "POST",
+        "url": "http://172.24.66.234:8080/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "MEDAINOTIFICATIONSECRET"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  event: 'reminder.fired',\n  data: {\n    reminder_id: $json.reminder_id,\n    user_id: $json.user_id,\n    channel: $json.channel,\n    fired_at: $now.toISO()\n  }\n}) }}",
+        "options": {
+          "timeout": 5000
+        }
       },
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "name": "Split Channels",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "3ee3f984-cfb9-4c43-91b9-d6166751cc85",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        -416,
-        912
-      ]
+        12816,
+        5792
+      ],
+      "notes": "Notifica al backend que el recordatorio fue enviado (por canal)"
     }
   ],
-  "pinData": {
-    "Webhook Entry": [
-      {
-        "json": {
-          "headers": {
-            "content-type": "application/json",
-            "user-agent": "PostmanRuntime/7.54.0",
-            "accept": "*/*",
-            "cache-control": "no-cache",
-            "postman-token": "c15c7f1e-9594-43f5-bf73-abbc3a4097c0",
-            "host": "localhost:5678",
-            "accept-encoding": "gzip, deflate, br",
-            "connection": "keep-alive",
-            "content-length": "668"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "user_id": "c17d3951-07a7-4dc2-b37e-ecf710d1d041",
-            "session_id": "c17d3951-07a7-4dc2-b37e-ecf710d1d041",
-            "reminder_id": "rem_1778536680",
-            "medication": "Tomar agua",
-            "schedule": "16:58",
-            "message": "¡Es hora de tomar un vaso de agua!",
-            "notes": "",
-            "channel": "webpush",
-            "notify_id": "c17d3951-07a7-4dc2-b37e-ecf710d1d041",
-            "channels": [
-              { "channel": "webpush", "notify_id": "c17d3951-07a7-4dc2-b37e-ecf710d1d041", "onesignal_app_id": "", "discord_webhook_url": "" },
-              { "channel": "whatsapp", "notify_id": "573107073803", "onesignal_app_id": "", "discord_webhook_url": "" }
-            ],
-            "delay_minutes": 1,
-            "created_at": "2026-05-10T17:02:50.781992",
-            "is_recurring": false,
-            "recurrence_type": "interval_hours",
-            "recurrence_days": [],
-            "recurrence_interval": "",
-            "recurrence_end_date": "2026-05-10",
-            "n8n_webhook_url": "http://localhost:5678/webhook/medai-reminder"
-          },
-          "webhookUrl": "http://localhost:5678/webhook-test/medai-reminder",
-          "executionMode": "test"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
+  "pinData": {},
   "connections": {
     "Webhook Entry": {
       "main": [
         [
           {
-            "node": "Normalize Input",
+            "node": "Extract Fields",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalize Input": {
+    "Extract Fields": {
       "main": [
         [
           {
-            "node": "Get a row",
+            "node": "Respond 200 OK",
             "type": "main",
             "index": 0
           }
         ]
-      ]
-    },
-    "Save to Database": {
-      "main": [
-        []
       ]
     },
     "Respond 200 OK": {
@@ -1142,18 +516,7 @@
       "main": [
         [
           {
-            "node": "Wait Until Scheduled Time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait Until Scheduled Time": {
-      "main": [
-        [
-          {
-            "node": "Update Status → Firing",
+            "node": "Switch Channel",
             "type": "main",
             "index": 0
           }
@@ -1210,11 +573,33 @@
         ]
       ]
     },
+    "Attach .ics to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram .ics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Send Telegram .ics": {
       "main": [
         [
           {
             "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach .ics to Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email + .ics",
             "type": "main",
             "index": 0
           }
@@ -1254,191 +639,6 @@
         ]
       ]
     },
-    "Callback to Backend": {
-      "main": [
-        [
-          {
-            "node": "Update Status → Completed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "On Error": {
-      "main": [
-        [
-          {
-            "node": "Extract Error Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Error Context": {
-      "main": [
-        [
-          {
-            "node": "Mark as Failed in DB",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Attach .ics to Email": {
-      "main": [
-        [
-          {
-            "node": "Send Email + .ics",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Attach .ics to Telegram": {
-      "main": [
-        [
-          {
-            "node": "Send Telegram .ics",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check if Recurring": {
-      "main": [
-        [
-          {
-            "node": "Calculate Next Occurrence",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Calculate Next Occurrence": {
-      "main": [
-        [
-          {
-            "node": "Should Requeue?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Requeue?": {
-      "main": [
-        [
-          {
-            "node": "Re-queue Reminder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Re-queue Reminder": {
-      "main": [
-        []
-      ]
-    },
-    "Create a row": {
-      "main": [
-        [
-          {
-            "node": "Respond 200 OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Data": {
-      "main": [
-        [
-          {
-            "node": "Create a row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Status → Firing pg": {
-      "main": [
-        []
-      ]
-    },
-    "Update Status → Firing": {
-      "main": [
-        [
-          {
-            "node": "Split Channels",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Channels": {
-      "main": [
-        [
-          {
-            "node": "Switch Channel",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Status → Completed pg": {
-      "main": [
-        []
-      ]
-    },
-    "Update Status → Completed": {
-      "main": [
-        [
-          {
-            "node": "Check if Recurring",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Mark as Failed in DB pg": {
-      "main": [
-        []
-      ]
-    },
-    "Mark as Failed in DB": {
-      "main": [
-        [
-          {
-            "node": "Notify Backend of Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get a row": {
-      "main": [
-        [
-          {
-            "node": "Parse Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "HTTP Request": {
       "main": [
         [
@@ -1457,17 +657,18 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "5034618a-9ca6-46c2-889b-f63e17c216b7",
+  "versionId": "b810ddf3-53b0-4504-a2b7-8a5b08361af0",
   "meta": {
+    "templateCredsSetupCompleted": true,
     "instanceId": "0c4f7c70fc44a45c19fc253fba6ed33ecb3324e2ee86a6541e4601f5b5d9feb8"
   },
   "id": "HZG8RxsuMYOGFXxx",
   "tags": [
     {
-      "updatedAt": "2026-05-07T03:48:26.005Z",
-      "createdAt": "2026-05-07T03:48:26.005Z",
-      "id": "PquZk9Rd7hLJ3J9x",
-      "name": "MedAI"
+      "updatedAt": "2026-05-07T03:48:26.010Z",
+      "createdAt": "2026-05-07T03:48:26.010Z",
+      "id": "z1HPFA4656FbjjuZ",
+      "name": "Reminders"
     },
     {
       "updatedAt": "2026-05-07T03:48:26.010Z",
@@ -1476,10 +677,10 @@
       "name": "Multi-user"
     },
     {
-      "updatedAt": "2026-05-07T03:48:26.010Z",
-      "createdAt": "2026-05-07T03:48:26.010Z",
-      "id": "z1HPFA4656FbjjuZ",
-      "name": "Reminders"
+      "updatedAt": "2026-05-07T03:48:26.005Z",
+      "createdAt": "2026-05-07T03:48:26.005Z",
+      "id": "PquZk9Rd7hLJ3J9x",
+      "name": "MedAI"
     }
   ]
 }
