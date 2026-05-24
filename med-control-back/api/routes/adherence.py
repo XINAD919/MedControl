@@ -13,6 +13,7 @@ from core.db import (
     get_reminders_for_adherence,
     get_latest_adherence_analysis,
     save_adherence_analysis,
+    is_caregiver_of,
 )
 from deps import CurrentUser, get_current_user
 
@@ -30,6 +31,7 @@ class AdherenceMetrics(BaseModel):
     recent_adherence_rate: float
     medications: list[str]
     trend: str  # "mejorando" | "estable" | "empeorando"
+    streak_days: int = 0
 
 
 class AdherenceAnalysisResponse(BaseModel):
@@ -97,6 +99,26 @@ def _compute_metrics(reminders: list[dict], period_days: int) -> AdherenceMetric
 
     medications = list({r["medication"] for r in reminders if r.get("medication")})
 
+    # Racha: días consecutivos hasta hoy con 100% de dosis tomadas
+    from collections import defaultdict
+    by_day: dict[str, list[dict]] = defaultdict(list)
+    for r in past:
+        day_key = _parse_dt(r["scheduled_at"]).strftime("%Y-%m-%d")
+        by_day[day_key].append(r)
+
+    streak_days = 0
+    check_date = now - timedelta(days=1)  # empieza ayer (hoy puede estar incompleto)
+    while True:
+        key = check_date.strftime("%Y-%m-%d")
+        day_reminders = by_day.get(key)
+        if not day_reminders:
+            break
+        if all(r.get("taken") for r in day_reminders):
+            streak_days += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+
     return AdherenceMetrics(
         total_due=total_due,
         total_taken=total_taken,
@@ -106,6 +128,7 @@ def _compute_metrics(reminders: list[dict], period_days: int) -> AdherenceMetric
         recent_adherence_rate=round(recent_rate, 4),
         medications=medications,
         trend=trend,
+        streak_days=streak_days,
     )
 
 
@@ -183,13 +206,21 @@ def _parse_dt(value) -> datetime:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+async def _assert_can_access_patient(current_user: CurrentUser, patient_id: str) -> bool:
+    """Devuelve True si el acceso es como caregiver (para filtrar privados)."""
+    if current_user.user_id == patient_id:
+        return False
+    if await is_caregiver_of(current_user.user_id, patient_id):
+        return True
+    raise HTTPException(status_code=403, detail="No autorizado")
+
+
 @router.get("/users/{user_id}/adherence-analysis/latest", response_model=Optional[AdherenceAnalysisResponse])
 async def get_latest_analysis(
     user_id: str,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    if user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    await _assert_can_access_patient(current_user, user_id)
     row = await get_latest_adherence_analysis(user_id)
     if not row:
         return None
@@ -209,10 +240,9 @@ async def generate_analysis(
     period_days: int = 30,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    if user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    as_caregiver = await _assert_can_access_patient(current_user, user_id)
 
-    reminders = await get_reminders_for_adherence(user_id, period_days)
+    reminders = await get_reminders_for_adherence(user_id, period_days, exclude_private=as_caregiver)
 
     if not reminders:
         raise HTTPException(

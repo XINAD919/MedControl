@@ -40,6 +40,7 @@ class LoginRequest(BaseModel):
 class AuthResponse(BaseModel):
     id: str
     role: str
+    linked_patient_ids: list[str] = []
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,8 +71,11 @@ async def find_or_create_oauth_user(
     client = get_supabase()
     res = await client.table("users").select("id, role").eq("email", payload.email).maybe_single().execute()
     if res and res.data:
-        logger.info(f"OAuth login: usuario existente {res.data['id']}")
-        return AuthResponse(id=res.data["id"], role=res.data["role"])
+        from core.db import get_linked_patient_ids
+        user_id = res.data["id"]
+        linked = await get_linked_patient_ids(user_id)
+        logger.info(f"OAuth login: usuario existente {user_id}")
+        return AuthResponse(id=user_id, role=res.data["role"], linked_patient_ids=linked)
 
     username = await _find_or_build_username(client, payload.email)
     res2 = await client.table("users").insert({
@@ -82,7 +86,7 @@ async def find_or_create_oauth_user(
     }).execute()
     user_id = res2.data[0]["id"]
     logger.info(f"OAuth: nuevo usuario creado {user_id} para {payload.email}")
-    return AuthResponse(id=user_id, role="USER")
+    return AuthResponse(id=user_id, role="USER", linked_patient_ids=[])
 
 
 @router.post("/auth/register", response_model=AuthResponse, tags=["Auth"])
@@ -100,8 +104,7 @@ async def register(
     if existing and existing.data:
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese email")
 
-    # Determinar rol: CAREGIVER si hay un caregiver_token válido
-    role = "USER"
+    # Verificar caregiver_token si viene (nuevo usuario invitado)
     invitation = None
     if payload.caregiver_token:
         from core.db import get_invitation_by_token
@@ -113,7 +116,6 @@ async def register(
             if exp.tzinfo is None:
                 exp = exp.replace(tzinfo=timezone.utc)
             if datetime.now(timezone.utc) <= exp:
-                role = "CAREGIVER"
                 invitation = inv
 
     password_hash = bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode()
@@ -123,19 +125,21 @@ async def register(
         "email": payload.email,
         "password_hash": password_hash,
         "preferences": {"name": payload.name or username},
-        "role": role,
+        "role": "USER",
     }).execute()
     user_id = res.data[0]["id"]
 
     # Si hay invitación válida, crear la vinculación y marcar aceptada
+    linked: list[str] = []
     if invitation:
         from core.db import create_family_member, update_invitation_status
         await create_family_member(patient_id=invitation["inviter_id"], caregiver_id=user_id)
         await update_invitation_status(payload.caregiver_token, "accepted")
+        linked = [invitation["inviter_id"]]
         logger.info(f"Registro cuidador: {user_id} vinculado al paciente {invitation['inviter_id']}")
 
-    logger.info(f"Registro: nuevo usuario {user_id} ({role}) para {payload.email}")
-    return AuthResponse(id=user_id, role=role)
+    logger.info(f"Registro: nuevo usuario {user_id} para {payload.email}")
+    return AuthResponse(id=user_id, role="USER", linked_patient_ids=linked)
 
 
 @router.post("/auth/login", response_model=AuthResponse, tags=["Auth"])
@@ -155,5 +159,8 @@ async def login(
     if not bcrypt.checkpw(payload.password.encode(), res.data["password_hash"].encode()):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    logger.info(f"Login: {res.data['id']}")
-    return AuthResponse(id=res.data["id"], role=res.data["role"])
+    from core.db import get_linked_patient_ids
+    user_id = res.data["id"]
+    linked = await get_linked_patient_ids(user_id)
+    logger.info(f"Login: {user_id}")
+    return AuthResponse(id=user_id, role=res.data["role"], linked_patient_ids=linked)
