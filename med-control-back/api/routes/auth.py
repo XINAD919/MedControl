@@ -29,6 +29,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: Optional[str] = None
+    caregiver_token: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -99,6 +100,22 @@ async def register(
     if existing and existing.data:
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese email")
 
+    # Determinar rol: CAREGIVER si hay un caregiver_token válido
+    role = "USER"
+    invitation = None
+    if payload.caregiver_token:
+        from core.db import get_invitation_by_token
+        from datetime import datetime, timezone
+        inv = await get_invitation_by_token(payload.caregiver_token)
+        if inv and inv.get("status") == "pending":
+            exp_raw = str(inv["expires_at"]).replace("Z", "+00:00")
+            exp = datetime.fromisoformat(exp_raw)
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) <= exp:
+                role = "CAREGIVER"
+                invitation = inv
+
     password_hash = bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode()
     username = await _find_or_build_username(client, payload.email)
     res = await client.table("users").insert({
@@ -106,11 +123,19 @@ async def register(
         "email": payload.email,
         "password_hash": password_hash,
         "preferences": {"name": payload.name or username},
-        "role": "USER",
+        "role": role,
     }).execute()
     user_id = res.data[0]["id"]
-    logger.info(f"Registro: nuevo usuario {user_id} para {payload.email}")
-    return AuthResponse(id=user_id, role="USER")
+
+    # Si hay invitación válida, crear la vinculación y marcar aceptada
+    if invitation:
+        from core.db import create_family_member, update_invitation_status
+        await create_family_member(patient_id=invitation["inviter_id"], caregiver_id=user_id)
+        await update_invitation_status(payload.caregiver_token, "accepted")
+        logger.info(f"Registro cuidador: {user_id} vinculado al paciente {invitation['inviter_id']}")
+
+    logger.info(f"Registro: nuevo usuario {user_id} ({role}) para {payload.email}")
+    return AuthResponse(id=user_id, role=role)
 
 
 @router.post("/auth/login", response_model=AuthResponse, tags=["Auth"])

@@ -454,3 +454,88 @@ async def get_user_notifications(user_id: str, status: Optional[str] = None) -> 
         q = q.eq("status", status)
     res = await q.order("created_at", desc=True).limit(200).execute()
     return res.data or []
+
+
+# ============================================================================
+# Familia / Invitaciones
+# ============================================================================
+
+
+async def create_family_invitation(
+    inviter_id: str,
+    invited_email: str,
+    token: str,
+    expires_at: str,
+) -> str:
+    client = get_supabase()
+    res = await client.table("family_invitations").insert({
+        "inviter_id": inviter_id,
+        "invited_email": invited_email,
+        "token": token,
+        "status": "pending",
+        "expires_at": expires_at,
+    }).execute()
+    return str(res.data[0]["id"])
+
+
+async def get_invitation_by_token(token: str) -> Optional[dict]:
+    client = get_supabase()
+    res = await client.table("family_invitations").select("*").eq("token", token).maybe_single().execute()
+    return res.data if res else None
+
+
+async def get_pending_invitations_by_inviter(inviter_id: str) -> list[dict]:
+    client = get_supabase()
+    res = await client.table("family_invitations")\
+        .select("id, invited_email, status, expires_at, created_at")\
+        .eq("inviter_id", inviter_id)\
+        .order("created_at", desc=True)\
+        .execute()
+    return res.data or []
+
+
+async def update_invitation_status(token: str, status: str) -> None:
+    client = get_supabase()
+    await client.table("family_invitations").update({"status": status}).eq("token", token).execute()
+
+
+async def create_family_member(patient_id: str, caregiver_id: str) -> None:
+    client = get_supabase()
+    await client.table("family_members").upsert(
+        {"patient_id": patient_id, "caregiver_id": caregiver_id},
+        on_conflict="patient_id,caregiver_id",
+    ).execute()
+
+
+async def get_linked_patients(caregiver_id: str) -> list[dict]:
+    """Pacientes que vincularon a este usuario como cuidador (Tab 1 Dashboard)."""
+    client = get_supabase()
+    res = await client.table("family_members")\
+        .select("patient_id, users!family_members_patient_id_fkey(id, email, preferences)")\
+        .eq("caregiver_id", caregiver_id)\
+        .execute()
+    return res.data or []
+
+
+async def get_family_members_of_patient(patient_id: str) -> list[dict]:
+    """Cuidadores vinculados a este paciente (Tab 2 Familiares)."""
+    client = get_supabase()
+    res = await client.table("family_members")\
+        .select("caregiver_id, users!family_members_caregiver_id_fkey(id, email, preferences)")\
+        .eq("patient_id", patient_id)\
+        .execute()
+    return res.data or []
+
+
+async def remove_family_member(patient_id: str, caregiver_id: str) -> None:
+    client = get_supabase()
+    await client.table("family_members")\
+        .delete()\
+        .eq("patient_id", patient_id)\
+        .eq("caregiver_id", caregiver_id)\
+        .execute()
+
+
+async def update_user_role(user_id: str, role: str) -> None:
+    client = get_supabase()
+    await client.table("users").update({"role": role}).eq("id", user_id).execute()
