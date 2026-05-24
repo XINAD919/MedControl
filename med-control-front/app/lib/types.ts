@@ -14,6 +14,7 @@ export interface Reminder {
   created_at: string
   taken: boolean
   taken_at: string | null
+  is_private: boolean
 }
 
 export interface Channel {
@@ -44,7 +45,7 @@ export interface Document {
   processing?: boolean
 }
 
-export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error'
+export type UploadStatus = 'idle' | 'uploading' | 'processing' | 'ready' | 'error'
 
 export interface AdherenceMetrics {
   total_due: number
@@ -55,6 +56,7 @@ export interface AdherenceMetrics {
   recent_adherence_rate: number
   medications: string[]
   trend: 'mejorando' | 'estable' | 'empeorando'
+  streak_days: number
 }
 
 export interface AdherenceAnalysis {
