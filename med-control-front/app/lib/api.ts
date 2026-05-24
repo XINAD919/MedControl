@@ -168,6 +168,28 @@ export function generateAdherenceAnalysis(
   )
 }
 
+export function fetchPatientAdherenceAnalysis(
+  session: Session,
+  patientId: string,
+): Promise<AdherenceAnalysis | null> {
+  return apiFetch<AdherenceAnalysis | null>(
+    `/api/users/${patientId}/adherence-analysis/latest`,
+    session.accessToken,
+  )
+}
+
+export function generatePatientAdherenceAnalysis(
+  session: Session,
+  patientId: string,
+  periodDays = 30,
+): Promise<AdherenceAnalysis> {
+  return apiFetch<AdherenceAnalysis>(
+    `/api/users/${patientId}/adherence-analysis?period_days=${periodDays}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
 // ── Familia ───────────────────────────────────────────────────────────────────
 
 export function fetchFamilyMembers(session: Session): Promise<FamilyMember[]> {
@@ -211,6 +233,23 @@ export function rejectInvitation(session: Session, token: string): Promise<{ ok:
     `/api/family/reject/${token}`,
     session.accessToken,
     { method: 'POST' },
+  )
+}
+
+export interface DelayedReminder {
+  reminder_id: string
+  medication: string
+  scheduled_at: string
+  manual_reminder_sent: boolean
+}
+
+export function fetchPatientDelayedReminders(
+  session: Session,
+  patientId: string,
+): Promise<DelayedReminder[]> {
+  return apiFetch<DelayedReminder[]>(
+    `/api/family/patients/${patientId}/delayed-reminders`,
+    session.accessToken,
   )
 }
 
