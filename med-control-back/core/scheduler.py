@@ -82,6 +82,7 @@ async def _process_group(reminder: dict, notifs: list[dict], webhook_url: str) -
                     "channel": notif["channel"],
                     "notify_id": notif["notify_id"],
                     "scheduled_at": reminder["scheduled_at"],
+                    "metadata": notif.get("metadata") or {},
                 }
                 try:
                     await http.post(webhook_url, json=payload)
