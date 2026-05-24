@@ -93,7 +93,6 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!session) return
-    setLoading(true)
     fetchNotifications(session)
       .then(setNotifications)
       .catch(err => setError(err.message))
@@ -112,9 +111,9 @@ export default function NotificationsPage() {
   if (!session) return null
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 pt-16 sm:pt-6 max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Notificaciones</h1>
+        <h1 className="text-2xl font-semibold text-gray-800">Notificaciones</h1>
         <p className="text-sm text-gray-400 mt-0.5">Historial de entregas por canal</p>
       </div>
 
@@ -124,6 +123,7 @@ export default function NotificationsPage() {
           {STATUS_FILTERS.map(f => (
             <button
               key={f.value}
+              type="button"
               onClick={() => setFilterStatus(f.value)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filterStatus === f.value
@@ -139,6 +139,7 @@ export default function NotificationsPage() {
           {CHANNEL_FILTERS.map(f => (
             <button
               key={f.value}
+              type="button"
               onClick={() => setFilterChannel(f.value)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filterChannel === f.value
@@ -225,7 +226,7 @@ export default function NotificationsPage() {
               </div>
 
               {/* Timestamp de creación */}
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-right hidden sm:block">
                 <span className="text-xs text-gray-300">
                   {formatDateTime(n.created_at)}
                 </span>

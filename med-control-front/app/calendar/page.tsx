@@ -88,9 +88,10 @@ export default function CalendarPage() {
   }
 
   const grouped = useMemo(() => {
-    const filtered = reminders
-      .filter(r => filter === 'all' || r.status === filter)
-      .filter(r => !search || r.medication.toLowerCase().includes(search.toLowerCase()))
+    const filtered = reminders.filter(r =>
+      (filter === 'all' || r.status === filter) &&
+      (!search || r.medication.toLowerCase().includes(search.toLowerCase()))
+    )
 
     const map: Record<string, Reminder[]> = {}
     for (const r of filtered) {
@@ -106,9 +107,9 @@ export default function CalendarPage() {
   if (!session) return null
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 pt-16 sm:pt-6 max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Calendario</h1>
+        <h1 className="text-2xl font-semibold text-gray-800">Calendario</h1>
         <p className="text-sm text-gray-400 mt-0.5">Agenda de recordatorios</p>
       </div>
 
@@ -118,6 +119,7 @@ export default function CalendarPage() {
           {FILTERS.map(f => (
             <button
               key={f.value}
+              type="button"
               onClick={() => setFilter(f.value)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filter === f.value
@@ -131,7 +133,8 @@ export default function CalendarPage() {
         </div>
         <input
           type="text"
-          placeholder="Buscar medicamento..."
+          aria-label="Buscar medicamento"
+          placeholder="Buscar medicamento…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -174,7 +177,7 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={r.reminder_id}
-                      className={`bg-white rounded-xl p-4 border shadow-sm flex items-center gap-4 ${overdue ? 'border-amber-200' : 'border-blue-50'}`}
+                      className={`bg-white rounded-xl p-4 border shadow-sm flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${overdue ? 'border-amber-200' : 'border-blue-50'}`}
                     >
                       <div className="shrink-0 flex flex-col items-center min-w-[48px]">
                         {overdue
@@ -192,7 +195,7 @@ export default function CalendarPage() {
                           <span className="text-sm font-semibold text-gray-800 truncate">{r.medication}</span>
                         </div>
                         <p className="text-xs text-gray-400 truncate mt-0.5">
-                          {overdue ? 'Hora pasada — ¿ya lo tomaste?' : r.message}
+                          {overdue ? 'Hora pasada, ¿ya lo tomaste?' : r.message}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -206,6 +209,7 @@ export default function CalendarPage() {
                           </span>
                         ) : canMarkTaken(r.scheduled_at) ? (
                           <button
+                            type="button"
                             onClick={() => handleTaken(r.reminder_id)}
                             className={`flex items-center gap-1 text-xs transition-colors ${overdue ? 'text-amber-400 hover:text-green-600' : 'text-gray-400 hover:text-green-600'}`}
                           >
@@ -214,6 +218,7 @@ export default function CalendarPage() {
                           </button>
                         ) : (
                           <button
+                            type="button"
                             disabled
                             title="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma."
                             className="flex items-center gap-1 text-xs text-gray-300 cursor-not-allowed"

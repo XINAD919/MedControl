@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSession } from 'next-auth/react'
-import { connectChatSocket, uploadDocument } from '../lib/api'
+import { connectChatSocket, fetchDocument, uploadDocument } from '../lib/api'
 import type { ChatMessage, UploadStatus } from '../lib/types'
 import { Send, Bot, User, AlertCircle, Trash2, Paperclip, X } from 'lucide-react'
 
@@ -14,7 +14,7 @@ function UserBubble({ content }: { content: string }) {
       <div className="max-w-[75%] bg-blue-500 text-white rounded-2xl rounded-br-sm px-4 py-3 text-sm leading-relaxed">
         {content}
       </div>
-      <div className="shrink-0 w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center mb-0.5">
+      <div className="shrink-0 size-7 bg-blue-100 rounded-full flex items-center justify-center mb-0.5">
         <User size={14} className="text-blue-500" />
       </div>
     </div>
@@ -24,7 +24,7 @@ function UserBubble({ content }: { content: string }) {
 function AssistantBubble({ content, streaming }: { content: string; streaming?: boolean }) {
   return (
     <div className="flex items-end gap-2">
-      <div className="shrink-0 w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center mb-0.5">
+      <div className="shrink-0 size-7 bg-blue-500 rounded-full flex items-center justify-center mb-0.5">
         <Bot size={14} className="text-white" />
       </div>
       <div className="max-w-[75%] bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 text-sm shadow-sm border border-blue-50 leading-relaxed">
@@ -32,9 +32,9 @@ function AssistantBubble({ content, streaming }: { content: string; streaming?: 
           <div className="md-prose"><ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown></div>
         ) : streaming ? (
           <span className="flex gap-1 items-center h-4">
-            <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:300ms]" />
+            <span className="size-1.5 bg-gray-300 rounded-full animate-pulse [animation-delay:0ms]" />
+            <span className="size-1.5 bg-gray-300 rounded-full animate-pulse [animation-delay:300ms]" />
+            <span className="size-1.5 bg-gray-300 rounded-full animate-pulse [animation-delay:600ms]" />
           </span>
         ) : null}
       </div>
@@ -62,13 +62,20 @@ export default function ChatPage() {
   const [streamError, setStreamError] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Cargar historial desde localStorage al montar
   useEffect(() => {
-    setMessages(loadMessages())
+    const loaded = loadMessages()
+    if (loaded.length > 0) {
+      Promise.resolve().then(() => {
+        setMessages(loaded)
+      })
+    }
   }, [])
 
   // Persistir mensajes cuando cambian
@@ -82,10 +89,41 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
+  useEffect(() => {
+    if (uploadStatus !== 'processing' || !pendingDocId || !session) return
+
+    let cancelled = false
+    let attempts = 0
+    const MAX_ATTEMPTS = 30
+
+    const poll = async () => {
+      if (cancelled) return
+      try {
+        const doc = await fetchDocument(session, pendingDocId)
+        if (doc.processed) {
+          if (!cancelled) setUploadStatus('ready')
+          return
+        }
+      } catch { /* transient error — keep polling */ }
+      attempts++
+      if (attempts >= MAX_ATTEMPTS) {
+        if (!cancelled) setUploadStatus('error')
+        return
+      }
+      pollingTimeoutRef.current = setTimeout(poll, 2000)
+    }
+
+    pollingTimeoutRef.current = setTimeout(poll, 2000)
+    return () => {
+      cancelled = true
+      if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
+    }
+  }, [uploadStatus, pendingDocId, session])
+
   if (status === 'loading') {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-blue-300 border-t-blue-500 rounded-full animate-spin" />
+        <div className="size-6 border-2 border-blue-300 border-t-blue-500 rounded-full animate-spin" />
       </div>
     )
   }
@@ -101,8 +139,9 @@ export default function ChatPage() {
     setUploadStatus('uploading')
 
     try {
-      await uploadDocument(session, file)
-      setUploadStatus('success')
+      const doc = await uploadDocument(session, file)
+      setPendingDocId(doc.id)
+      setUploadStatus('processing')
       setInput('He subido una receta médica. Por favor analízala y configura los recordatorios.')
       textareaRef.current?.focus()
     } catch {
@@ -112,12 +151,14 @@ export default function ChatPage() {
 
   const handleSubmit = () => {
     const text = input.trim()
-    if (!text || isStreaming) return
+    if (!text || isStreaming || uploadStatus === 'processing') return
 
-    setMessages(prev => [...prev, { role: 'user', content: text }])
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
     setInput('')
     setUploadStatus('idle')
     setUploadedFile(null)
+    if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
+    setPendingDocId(null)
     setIsStreaming(true)
     setStreamingContent('')
     setStreamError(false)
@@ -133,7 +174,7 @@ export default function ChatPage() {
         setStreamingContent(accumulated)
       },
       () => {
-        setMessages(prev => [...prev, { role: 'assistant', content: accumulated }])
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: accumulated }])
         setStreamingContent('')
         setIsStreaming(false)
         textareaRef.current?.focus()
@@ -162,12 +203,13 @@ export default function ChatPage() {
         ref={fileInputRef}
         type="file"
         accept="image/*,.pdf"
+        aria-label="Subir receta médica"
         className="hidden"
         onChange={handleFileSelected}
       />
       {/* Header */}
-      <div className="bg-white border-b border-blue-50 px-5 py-4 flex items-center gap-3 shrink-0">
-        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+      <div className="bg-white border-b border-blue-50 px-5 py-4 pl-16 sm:pl-5 flex items-center gap-3 shrink-0">
+        <div className="size-8 bg-blue-500 rounded-full flex items-center justify-center">
           <Bot size={16} className="text-white" />
         </div>
         <div>
@@ -177,6 +219,7 @@ export default function ChatPage() {
         <div className="ml-auto flex items-center gap-3">
           {messages.length > 0 && !isStreaming && (
             <button
+              type="button"
               onClick={() => { setMessages([]); localStorage.removeItem(STORAGE_KEY) }}
               title="Limpiar conversación"
               className="text-gray-300 hover:text-red-400 transition-colors"
@@ -184,15 +227,15 @@ export default function ChatPage() {
               <Trash2 size={15} />
             </button>
           )}
-          <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-blue-400 animate-pulse' : 'bg-green-400'}`} />
+          <div className={`size-2 rounded-full ${isStreaming ? 'bg-blue-400 animate-pulse' : 'bg-green-400'}`} />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
         {isEmpty && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center">
+            <div className="size-14 bg-blue-50 rounded-2xl flex items-center justify-center">
               <Bot size={28} className="text-blue-400" />
             </div>
             <div>
@@ -207,6 +250,7 @@ export default function ChatPage() {
                   key={suggestion}
                   onClick={() => { setInput(suggestion); textareaRef.current?.focus() }}
                   className="text-xs text-blue-500 border border-blue-100 bg-white hover:bg-blue-50 rounded-full px-4 py-1.5 transition-colors"
+                type="button"
                 >
                   {suggestion}
                 </button>
@@ -217,8 +261,8 @@ export default function ChatPage() {
 
         {messages.map((msg, i) =>
           msg.role === 'user'
-            ? <UserBubble key={i} content={msg.content} />
-            : <AssistantBubble key={i} content={msg.content} />
+            ? <UserBubble key={msg.id ?? i} content={msg.content} />
+            : <AssistantBubble key={msg.id ?? i} content={msg.content} />
         )}
 
         {/* In-progress streaming bubble */}
@@ -243,17 +287,29 @@ export default function ChatPage() {
           <div className="flex-1 min-w-0">
             <span className="text-xs font-medium text-gray-600 truncate block">{uploadedFile.name}</span>
             {uploadStatus === 'uploading' && (
-              <span className="text-xs text-blue-400">Subiendo...</span>
+              <span className="text-xs text-blue-400">Subiendo…</span>
             )}
-            {uploadStatus === 'success' && (
-              <span className="text-xs text-green-500">Subido — analizando prescripción en segundo plano</span>
+            {uploadStatus === 'processing' && (
+              <span className="text-xs text-blue-400 flex items-center gap-1">
+                <span className="size-3 border border-blue-300 border-t-blue-500 rounded-full animate-spin inline-block" />
+                Analizando prescripción…
+              </span>
+            )}
+            {uploadStatus === 'ready' && (
+              <span className="text-xs text-green-500">Listo — puedes enviar el mensaje</span>
             )}
             {uploadStatus === 'error' && (
-              <span className="text-xs text-red-400">Error al subir. Intenta de nuevo.</span>
+              <span className="text-xs text-red-400">Error al procesar. Intenta de nuevo.</span>
             )}
           </div>
           <button
-            onClick={() => { setUploadStatus('idle'); setUploadedFile(null) }}
+            type="button"
+            onClick={() => {
+              if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
+              setPendingDocId(null)
+              setUploadStatus('idle')
+              setUploadedFile(null)
+            }}
             className="text-gray-300 hover:text-gray-500 shrink-0"
           >
             <X size={13} />
@@ -268,9 +324,9 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isStreaming || uploadStatus === 'uploading'}
+            disabled={isStreaming || uploadStatus === 'uploading' || uploadStatus === 'processing'}
             title="Subir receta médica"
-            className="shrink-0 w-7 h-7 text-gray-300 hover:text-blue-400 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors mb-0.5"
+            className="shrink-0 size-7 text-gray-300 hover:text-blue-400 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors mb-0.5"
           >
             <Paperclip size={15} />
           </button>
@@ -280,20 +336,22 @@ export default function ChatPage() {
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
-            placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para nueva línea)"
+            aria-label="Escribe un mensaje"
+            placeholder="Escribe un mensaje… (Enter para enviar, Shift+Enter para nueva línea)"
             rows={1}
             className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-300 resize-none focus:outline-none max-h-32 leading-relaxed disabled:opacity-50"
             style={{ fieldSizing: 'content' } as React.CSSProperties}
           />
           <button
+            type="button"
             onClick={handleSubmit}
-            disabled={!input.trim() || isStreaming}
-            className="shrink-0 w-8 h-8 bg-blue-500 text-white rounded-xl flex items-center justify-center hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors mb-0.5"
+            disabled={!input.trim() || isStreaming || uploadStatus === 'processing'}
+            className="shrink-0 size-8 bg-blue-500 text-white rounded-xl flex items-center justify-center hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors mb-0.5"
           >
             <Send size={14} />
           </button>
         </div>
-        <p className="text-xs text-gray-300 text-center mt-1.5">Enter para enviar · Shift+Enter para nueva línea</p>
+        <p className="text-xs text-gray-300 text-center mt-1.5">Enter para enviar, Shift+Enter para nueva línea</p>
       </div>
     </div>
   )

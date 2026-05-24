@@ -29,3 +29,7 @@ body {
 .md-prose th { background: #f3f4f6; font-weight: 600; text-align: left; padding: 0.4rem 0.75rem; border: 1px solid #e5e7eb; }
 .md-prose td { padding: 0.4rem 0.75rem; border: 1px solid #e5e7eb; }
 .md-prose tr:nth-child(even) td { background: #f9fafb; }
+
+html, body {
+  overscroll-behavior: none;
+}

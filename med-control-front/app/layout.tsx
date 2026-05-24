@@ -1,19 +1,25 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
-import SideBar from "./components/SideBar";
 import Providers from "./providers";
-import { getServerSession } from "next-auth";
-import { authOptions } from "./lib/auth-options";
+import ClientLayout from "./components/ClientLayout";
 
 const roboto = Roboto({
   variable: "--font-roboto",
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#3b82f6',
+};
+
 export const metadata: Metadata = {
-  title: "MedControl",
+  title: { default: 'MedControl', template: '%s | MedControl' },
   description: "Tu asistente personal para la adherencia a tratamientos médicos",
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'MedControl' },
 };
 
 export default async function RootLayout({
@@ -21,17 +27,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession(authOptions);
-
   return (
     <html
       lang="es"
       className={`${roboto.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-row">
+      <body className="min-h-dvh flex flex-row">
         <Providers>
-          {session && <SideBar />}
-          <div className="flex-1 bg-blue-100">{children}</div>
+          <ClientLayout>{children}</ClientLayout>
         </Providers>
       </body>
     </html>

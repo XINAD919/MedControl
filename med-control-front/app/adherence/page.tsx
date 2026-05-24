@@ -152,23 +152,24 @@ export default function AdherencePage() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-gray-400">
           <RefreshCw size={28} className="animate-spin" />
-          <p className="text-sm">Cargando análisis...</p>
+          <p className="text-sm">Cargando análisis…</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-      <div className="max-w-2xl mx-auto flex flex-col gap-6">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
+      <div className="max-w-2xl mx-auto flex flex-col gap-6 pt-12 sm:pt-0">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Análisis de Adherencia</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Análisis de Adherencia</h1>
             <p className="text-sm text-gray-400 mt-0.5">Evaluación del comportamiento de toma de medicamentos</p>
           </div>
           <button
+            type="button"
             onClick={handleGenerate}
             disabled={generating}
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-xl hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
@@ -189,13 +190,13 @@ export default function AdherencePage() {
         {/* Empty state */}
         {!analysis && !generating && !error && (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center gap-4 text-center shadow-sm">
-            <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center">
+            <div className="size-14 rounded-full bg-blue-50 flex items-center justify-center">
               <Pill size={26} className="text-blue-400" />
             </div>
             <div>
               <p className="font-semibold text-gray-700">Sin análisis previo</p>
               <p className="text-sm text-gray-400 mt-1">
-                Presiona <span className="font-medium text-blue-500">Generar Análisis</span> para evaluar tu comportamiento de los últimos 30 días.
+                Presiona <span className="font-medium text-blue-500">Generar Análisis</span> para evaluar tu comportamiento de los últimos 30 días…
               </p>
             </div>
           </div>
@@ -204,7 +205,7 @@ export default function AdherencePage() {
         {/* Generating skeleton */}
         {generating && (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center gap-4 text-center shadow-sm animate-pulse">
-            <div className="w-14 h-14 rounded-full bg-blue-100" />
+            <div className="size-14 rounded-full bg-blue-100" />
             <div className="h-4 bg-gray-100 rounded w-48" />
             <div className="h-3 bg-gray-100 rounded w-64" />
           </div>
@@ -216,7 +217,7 @@ export default function AdherencePage() {
             <ScoreCard analysis={analysis} />
 
             {/* Metrics grid */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <MetricCard
                 icon={<CheckCircle2 size={18} />}
                 label="Adherencia global"
