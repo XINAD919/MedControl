@@ -245,11 +245,14 @@ export function connectChatSocket(
     onToken(event.data)
   }
 
+  let hadError = false
+
   ws.onclose = () => {
-    onDone()
+    if (!hadError) onDone()
   }
 
   ws.onerror = () => {
+    hadError = true
     onError()
     ws.close()
   }

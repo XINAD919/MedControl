@@ -174,7 +174,9 @@ export default function ChatPage() {
         setStreamingContent(accumulated)
       },
       () => {
-        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: accumulated }])
+        if (accumulated) {
+          setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: accumulated }])
+        }
         setStreamingContent('')
         setIsStreaming(false)
         textareaRef.current?.focus()

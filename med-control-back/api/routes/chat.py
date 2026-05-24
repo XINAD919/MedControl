@@ -1,5 +1,10 @@
+import logging
+
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from starlette.websockets import WebSocket
+
+logger = logging.getLogger(__name__)
 
 from core import db
 from deps import get_or_create_agent, validate_token
@@ -32,10 +37,28 @@ async def chat(
     await db.save_message(resolved_session_id, "user", user_msg)
 
     full_response: list[str] = []
-    async for tok in agent.chat_stream():
-        await websocket.send_text(tok)
-        if tok != "[DONE]":
-            full_response.append(tok)
+    try:
+        async for tok in agent.chat_stream():
+            await websocket.send_text(tok)
+            if tok != "[DONE]":
+                full_response.append(tok)
+    except httpx.ConnectError:
+        logger.error("LLM provider unreachable", exc_info=True)
+        try:
+            await websocket.send_text(
+                "⚠️ No se pudo conectar al proveedor de IA. "
+                "Verifica que el servicio esté disponible."
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error("Chat streaming error: %s", e, exc_info=True)
+        try:
+            await websocket.send_text(
+                "⚠️ Error al procesar tu mensaje. Por favor, intenta de nuevo."
+            )
+        except Exception:
+            pass
 
     await db.save_message(resolved_session_id, "assistant", "".join(full_response))
     await websocket.close()
