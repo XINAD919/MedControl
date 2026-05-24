@@ -48,6 +48,17 @@ export function markReminderTaken(session: Session, reminderId: string): Promise
   )
 }
 
+export function toggleReminderPrivacy(
+  session: Session,
+  reminderId: string,
+): Promise<{ ok: boolean; is_private: boolean }> {
+  return apiFetch<{ ok: boolean; is_private: boolean }>(
+    `/api/users/${session.user.id}/reminders/${reminderId}/privacy`,
+    session.accessToken,
+    { method: 'PATCH' },
+  )
+}
+
 // ── Channels ─────────────────────────────────────────────────────────────────
 
 export function fetchChannels(

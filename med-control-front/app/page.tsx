@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { fetchReminders, markReminderTaken } from './lib/api'
+import { fetchReminders, markReminderTaken, toggleReminderPrivacy } from './lib/api'
 import type { Reminder, ReminderStatus } from './lib/types'
-import { CalendarDays, Check, Clock, AlertTriangle } from 'lucide-react'
+import { CalendarDays, Check, Clock, AlertTriangle, Lock, Unlock } from 'lucide-react'
 
 const STATUS_CLASSES: Record<ReminderStatus, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -48,7 +48,15 @@ function canMarkTaken(scheduledAt: string): boolean {
   return toUtcDate(scheduledAt).getTime() - Date.now() < 2 * 60 * 60 * 1000
 }
 
-function ReminderCard({ reminder, onTaken }: { reminder: Reminder; onTaken: (id: string) => void }) {
+function ReminderCard({
+  reminder,
+  onTaken,
+  onPrivacyToggle,
+}: {
+  reminder: Reminder
+  onTaken: (id: string) => void
+  onPrivacyToggle: (id: string) => void
+}) {
   const overdue = isOverdue(reminder)
   return (
     <div className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col gap-2 transition-colors ${
@@ -60,13 +68,16 @@ function ReminderCard({ reminder, onTaken }: { reminder: Reminder; onTaken: (id:
           <span className={`font-semibold text-sm leading-tight ${reminder.taken ? 'line-through text-gray-400' : 'text-gray-800'}`}>
             {reminder.medication}
           </span>
+          {reminder.is_private && (
+            <span className="text-xs text-purple-400 font-medium">· Privado</span>
+          )}
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_CLASSES[reminder.status]}`}>
           {STATUS_LABELS[reminder.status]}
         </span>
       </div>
       {overdue && (
-        <p className="text-xs text-amber-500 font-medium">Hora pasada — ¿ya lo tomaste?</p>
+        <p className="text-xs text-amber-500 font-medium">Hora pasada, ¿ya lo tomaste?</p>
       )}
       <p className="text-xs text-gray-400 line-clamp-2">{reminder.message}</p>
       <div className="flex items-center justify-between gap-2">
@@ -74,29 +85,41 @@ function ReminderCard({ reminder, onTaken }: { reminder: Reminder; onTaken: (id:
           <Clock size={12} />
           <span>{formatTime(reminder.scheduled_at)}</span>
         </div>
-        {reminder.taken ? (
-          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-            <Check size={12} />
-            Tomado
-          </span>
-        ) : canMarkTaken(reminder.scheduled_at) ? (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => onTaken(reminder.reminder_id)}
-            className={`flex items-center gap-1 text-xs transition-colors ${overdue ? 'text-amber-400 hover:text-green-600' : 'text-gray-400 hover:text-green-600'}`}
+            type="button"
+            onClick={() => onPrivacyToggle(reminder.reminder_id)}
+            title={reminder.is_private ? 'Hacer público (visible para cuidadores)' : 'Marcar como privado (oculto a cuidadores)'}
+            className={`p-1 rounded transition-colors ${reminder.is_private ? 'text-purple-400 hover:text-purple-600' : 'text-gray-300 hover:text-purple-400'}`}
           >
-            <Check size={12} />
-            Marcar tomado
+            {reminder.is_private ? <Lock size={12} /> : <Unlock size={12} />}
           </button>
-        ) : (
-          <button
-            disabled
-            title="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma."
-            className="flex items-center gap-1 text-xs text-gray-300 cursor-not-allowed"
-          >
-            <Check size={12} />
-            Marcar tomado
-          </button>
-        )}
+          {reminder.taken ? (
+            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+              <Check size={12} />
+              Tomado
+            </span>
+          ) : canMarkTaken(reminder.scheduled_at) ? (
+            <button
+              type="button"
+              onClick={() => onTaken(reminder.reminder_id)}
+              className={`flex items-center gap-1 text-xs transition-colors ${overdue ? 'text-amber-400 hover:text-green-600' : 'text-gray-400 hover:text-green-600'}`}
+            >
+              <Check size={12} />
+              Marcar tomado
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="No puedes marcar este medicamento como tomado hasta que falten menos de 2 horas para la toma."
+              className="flex items-center gap-1 text-xs text-gray-300 cursor-not-allowed"
+            >
+              <Check size={12} />
+              Marcar tomado
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -154,14 +177,23 @@ export default function DashboardPage() {
     }).catch(() => {})
   }
 
+  function handlePrivacyToggle(reminderId: string) {
+    if (!session) return
+    toggleReminderPrivacy(session, reminderId).then(({ is_private }) => {
+      const patch = (r: Reminder) => r.reminder_id === reminderId ? { ...r, is_private } : r
+      setTodayReminders(prev => prev.map(patch))
+      setUpcomingReminders(prev => prev.map(patch))
+    }).catch(() => {})
+  }
+
   if (status === 'loading') return <div className="p-6 animate-pulse"><div className="h-6 bg-white rounded w-48" /></div>
   if (!session) return null
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 pt-16 sm:pt-6 max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-0.5">
+        <h1 className="text-2xl font-semibold text-gray-800">Dashboard</h1>
+        <p className="text-sm text-gray-400 mt-0.5" suppressHydrationWarning>
           {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
@@ -195,7 +227,7 @@ export default function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {todayReminders.map(r => (
-              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} />
+              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} onPrivacyToggle={handlePrivacyToggle} />
             ))}
           </div>
         )}
@@ -210,7 +242,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col gap-3">
             {upcomingReminders.map(r => (
-              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} />
+              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} onPrivacyToggle={handlePrivacyToggle} />
             ))}
           </div>
         </section>
