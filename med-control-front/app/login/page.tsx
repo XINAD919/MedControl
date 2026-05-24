@@ -1,8 +1,9 @@
 'use client'
 
 import { signIn } from 'next-auth/react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 
 const ERROR_MESSAGES: Record<string, string> = {
   OAuthSignin: 'Error al iniciar sesión con el proveedor seleccionado.',
@@ -13,7 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   Default: 'Ocurrió un error inesperado. Intenta de nuevo.',
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') ?? '/'
   const errorCode = searchParams.get('error')
@@ -44,11 +45,11 @@ export default function LoginPage() {
         {/* Header */}
         <div className="flex flex-col items-center mb-8 gap-2">
           <div className="bg-blue-500 rounded-2xl p-3.5 flex items-center justify-center mb-1">
-            <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
+            <svg viewBox="0 0 24 24" className="size-7 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">MedControl</h1>
+          <h1 className="text-xl font-semibold text-gray-900">MedControl</h1>
           <p className="text-sm text-gray-400">Inicia sesión para continuar</p>
         </div>
 
@@ -62,11 +63,12 @@ export default function LoginPage() {
         {/* OAuth buttons */}
         <div className="flex flex-col gap-3 mb-6">
           <button
+            type="button"
             onClick={() => handleOAuth('google')}
             disabled={loading !== null}
             className="flex items-center justify-center gap-3 w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" aria-hidden>
+            <svg viewBox="0 0 24 24" className="size-5 shrink-0" aria-hidden>
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
@@ -76,11 +78,12 @@ export default function LoginPage() {
           </button>
 
           <button
+            type="button"
             onClick={() => handleOAuth('azure-ad')}
             disabled={loading !== null}
             className="flex items-center justify-center gap-3 w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            <svg viewBox="0 0 23 23" className="w-5 h-5 shrink-0" aria-hidden>
+            <svg viewBox="0 0 23 23" className="size-5 shrink-0" aria-hidden>
               <path fill="#f25022" d="M1 1h10v10H1z" />
               <path fill="#00a4ef" d="M12 1h10v10H12z" />
               <path fill="#7fba00" d="M1 12h10v10H1z" />
@@ -100,10 +103,12 @@ export default function LoginPage() {
         {/* Credentials form */}
         <form onSubmit={handleCredentials} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">
+            <label htmlFor="login-email" className="text-xs font-medium text-gray-500 mb-1 block">
               Correo electrónico
             </label>
             <input
+              id="login-email"
+              aria-label="Correo electrónico"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -114,10 +119,12 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">
+            <label htmlFor="login-password" className="text-xs font-medium text-gray-500 mb-1 block">
               Contraseña
             </label>
             <input
+              id="login-password"
+              aria-label="Contraseña"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -136,7 +143,22 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <p className="text-center text-xs text-gray-400 mt-5">
+          ¿No tienes una cuenta?{' '}
+          <Link href="/register" className="text-blue-500 font-medium hover:underline">
+            Regístrate
+          </Link>
+        </p>
+
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen animate-pulse bg-blue-50" />}>
+      <LoginContent />
+    </Suspense>
   )
 }
