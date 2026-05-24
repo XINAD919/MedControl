@@ -12,6 +12,8 @@ volumes/*
 
 # Historial de conversación
 /historial.json
+/*/historiales/*.json
+/historiales/*.json
 
 # Python
 __pycache__/
