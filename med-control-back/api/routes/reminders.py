@@ -28,6 +28,7 @@ class ReminderResponse(BaseModel):
     created_at: str
     taken: bool = False
     taken_at: Optional[str] = None
+    is_private: bool = False
 
 
 @router.get("/users/{user_id}/reminders", response_model=list[ReminderResponse])
@@ -66,6 +67,7 @@ async def list_reminders(
             created_at=fmt(r["created_at"]),
             taken=bool(r.get("taken", False)),
             taken_at=fmt(r.get("taken_at")),
+            is_private=bool(r.get("is_private", False)),
         )
         for r in rows
     ]
@@ -104,3 +106,26 @@ async def mark_reminder_taken(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"ok": True}
+
+
+@router.patch("/users/{user_id}/reminders/{reminder_id}/privacy")
+async def toggle_reminder_privacy(
+    user_id: str,
+    reminder_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Alterna el estado privado/público de un recordatorio."""
+    if user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    try:
+        db = get_supabase()
+        row = await db.table("reminders").select("is_private").eq("reminder_id", reminder_id).eq("user_id", user_id).maybe_single().execute()
+        if not row or not row.data:
+            raise HTTPException(status_code=404, detail="Recordatorio no encontrado")
+        new_value = not bool(row.data.get("is_private", False))
+        await db.table("reminders").update({"is_private": new_value}).eq("reminder_id", reminder_id).eq("user_id", user_id).execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True, "is_private": new_value}

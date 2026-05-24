@@ -383,6 +383,19 @@ async def get_user_documents(user_id: str) -> list[dict]:
     return res.data or []
 
 
+async def get_document_by_id(user_id: str, doc_id: str) -> dict | None:
+    client = get_supabase()
+    res = await (
+        client.table("documents")
+        .select("id, filename, file_type, document_type, file_size, processed, chunk_count, uploaded_at")
+        .eq("user_id", user_id)
+        .eq("id", doc_id)
+        .maybe_single()
+        .execute()
+    )
+    return res.data or None
+
+
 # ============================================================================
 # Notificaciones de recordatorios
 # ============================================================================
@@ -425,22 +438,42 @@ async def get_latest_adherence_analysis(user_id: str) -> Optional[dict]:
     return res.data if res else None
 
 
-async def get_reminders_for_adherence(user_id: str, period_days: int = 30) -> list[dict]:
+async def get_reminders_for_adherence(
+    user_id: str,
+    period_days: int = 30,
+    exclude_private: bool = False,
+) -> list[dict]:
     """Retorna recordatorios pasados dentro del período para calcular métricas."""
     from datetime import datetime, timedelta, timezone
     since = (datetime.now(timezone.utc) - timedelta(days=period_days)).isoformat()
     now = datetime.now(timezone.utc).isoformat()
     client = get_supabase()
-    res = await (
+    q = (
         client.table("reminders")
         .select("medication, scheduled_at, taken, taken_at, status")
         .eq("user_id", user_id)
         .gte("scheduled_at", since)
         .lte("scheduled_at", now)
         .order("scheduled_at", desc=True)
+    )
+    if exclude_private:
+        q = q.eq("is_private", False)
+    res = await q.execute()
+    return res.data or []
+
+
+async def is_caregiver_of(caregiver_id: str, patient_id: str) -> bool:
+    """Verifica si caregiver_id tiene acceso al paciente patient_id."""
+    client = get_supabase()
+    res = await (
+        client.table("family_members")
+        .select("id")
+        .eq("caregiver_id", caregiver_id)
+        .eq("patient_id", patient_id)
+        .maybe_single()
         .execute()
     )
-    return res.data or []
+    return bool(res and res.data)
 
 
 async def get_user_notifications(user_id: str, status: Optional[str] = None) -> list[dict]:
@@ -499,6 +532,26 @@ async def update_invitation_status(token: str, status: str) -> None:
     await client.table("family_invitations").update({"status": status}).eq("token", token).execute()
 
 
+async def get_invitation_by_id(invitation_id: str) -> Optional[dict]:
+    client = get_supabase()
+    res = await client.table("family_invitations").select("*").eq("id", invitation_id).maybe_single().execute()
+    return res.data if res else None
+
+
+async def update_invitation_status_by_id(invitation_id: str, status: str) -> None:
+    client = get_supabase()
+    await client.table("family_invitations").update({"status": status}).eq("id", invitation_id).execute()
+
+
+async def refresh_invitation_token(invitation_id: str, new_token: str, new_expires: str) -> None:
+    client = get_supabase()
+    await client.table("family_invitations").update({
+        "token": new_token,
+        "expires_at": new_expires,
+        "status": "pending",
+    }).eq("id", invitation_id).execute()
+
+
 async def create_family_member(patient_id: str, caregiver_id: str) -> None:
     client = get_supabase()
     await client.table("family_members").upsert(
@@ -539,3 +592,68 @@ async def remove_family_member(patient_id: str, caregiver_id: str) -> None:
 async def update_user_role(user_id: str, role: str) -> None:
     client = get_supabase()
     await client.table("users").update({"role": role}).eq("id", user_id).execute()
+
+
+async def get_linked_patient_ids(caregiver_id: str) -> list[str]:
+    """Devuelve los IDs de los pacientes que vincularon a este usuario como cuidador."""
+    client = get_supabase()
+    res = await client.table("family_members").select("patient_id").eq("caregiver_id", caregiver_id).execute()
+    return [r["patient_id"] for r in (res.data or [])]
+
+
+async def get_delayed_reminders_for_caregiver(patient_id: str) -> list[dict]:
+    """Dosis retrasadas >20 min, no tomadas y no privadas de un paciente."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+    client = get_supabase()
+    res = await (
+        client.table("reminders")
+        .select("reminder_id, medication, scheduled_at")
+        .eq("user_id", patient_id)
+        .eq("status", "completed")
+        .eq("taken", False)
+        .eq("is_private", False)
+        .lte("scheduled_at", cutoff)
+        .order("scheduled_at", desc=True)
+        .execute()
+    )
+    return res.data or []
+
+
+async def get_reminder_for_caregiver(patient_id: str, reminder_id: str) -> Optional[dict]:
+    """Obtiene un recordatorio de un paciente para que el caregiver lo valide."""
+    client = get_supabase()
+    res = await (
+        client.table("reminders")
+        .select("reminder_id, medication, scheduled_at, taken, is_private")
+        .eq("user_id", patient_id)
+        .eq("reminder_id", reminder_id)
+        .maybe_single()
+        .execute()
+    )
+    return res.data if res else None
+
+
+async def get_manual_reminder_sent_ids(caregiver_id: str, reminder_ids: list[str]) -> set[str]:
+    """IDs de recordatorios a los que el caregiver ya envió recordatorio manual."""
+    if not reminder_ids:
+        return set()
+    client = get_supabase()
+    res = await (
+        client.table("manual_reminder_sends")
+        .select("reminder_id")
+        .eq("caregiver_id", caregiver_id)
+        .in_("reminder_id", reminder_ids)
+        .execute()
+    )
+    return {r["reminder_id"] for r in (res.data or [])}
+
+
+async def insert_manual_reminder_send(reminder_id: str, caregiver_id: str, patient_id: str) -> None:
+    """Registra el envío de un recordatorio manual. Lanza excepción si ya existe (UNIQUE)."""
+    client = get_supabase()
+    await client.table("manual_reminder_sends").insert({
+        "reminder_id": reminder_id,
+        "caregiver_id": caregiver_id,
+        "patient_id": patient_id,
+    }).execute()

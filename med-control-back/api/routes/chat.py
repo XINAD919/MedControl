@@ -4,10 +4,10 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from starlette.websockets import WebSocket
 
-logger = logging.getLogger(__name__)
-
 from core import db
 from deps import get_or_create_agent, validate_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/ws",
