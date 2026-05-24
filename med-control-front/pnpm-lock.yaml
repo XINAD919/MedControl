@@ -29,6 +29,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.4)
+      react-onesignal:
+        specifier: ^3.5.3
+        version: 3.5.3
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
@@ -1996,6 +1999,10 @@ packages:
     peerDependencies:
       '@types/react': '>=18'
       react: '>=18'
+
+  react-onesignal@3.5.3:
+    resolution: {integrity: sha512-ooN/b+VE70cCV/rQxmGgBoG/YWH/PEhcQxBTkrFyD96s1p+fbHrEiEW+IoFrDvvgIpaXGPar7mDBVzzvxSixrw==}
+    engines: {node: '>=18'}
 
   react@19.2.4:
     resolution: {integrity: sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ==}
@@ -4576,6 +4583,8 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  react-onesignal@3.5.3: {}
 
   react@19.2.4: {}
 
