@@ -19,7 +19,7 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
-from core.db import create_document, get_user_documents, update_document_processing
+from core.db import create_document, get_document_by_id, get_user_documents, update_document_processing
 from deps import CurrentUser, get_current_user
 from core.embeddings import generate_and_save_embeddings
 from core.ocr import process_prescription
@@ -151,6 +151,29 @@ async def upload_document(
         chunk_count=0,
         uploaded_at="",
         processing=True,
+    )
+
+
+@router.get("/users/{user_id}/documents/{doc_id}", response_model=DocumentResponse)
+async def get_document(
+    user_id: str,
+    doc_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    if user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    row = await get_document_by_id(user_id, doc_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DocumentResponse(
+        id=str(row["id"]),
+        filename=row["filename"],
+        file_type=row.get("file_type"),
+        document_type=str(row.get("document_type", "prescription")),
+        file_size=row.get("file_size"),
+        processed=bool(row.get("processed", False)),
+        chunk_count=int(row.get("chunk_count", 0)),
+        uploaded_at=str(row.get("uploaded_at", "")),
     )
 
 

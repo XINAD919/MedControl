@@ -141,6 +141,13 @@ export async function uploadDocument(session: Session, file: File): Promise<Docu
   return res.json() as Promise<Document>
 }
 
+export function fetchDocument(session: Session, docId: string): Promise<Document> {
+  return apiFetch<Document>(
+    `/api/users/${session.user.id}/documents/${docId}`,
+    session.accessToken,
+  )
+}
+
 // ── Adherencia ────────────────────────────────────────────────────────────────
 
 export function fetchLatestAdherenceAnalysis(session: Session): Promise<AdherenceAnalysis | null> {
