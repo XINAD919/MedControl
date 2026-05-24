@@ -1,12 +1,48 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { fetchChannels, createChannel, deleteChannel, toggleChannelReminders } from '../lib/api'
 import { canWrite } from '../lib/rbac'
 import type { Channel, ChannelType } from '../lib/types'
-import { Send, Mail, Hash, Bell, Phone, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X } from 'lucide-react'
+import { Send, Mail, Hash, Bell, Phone, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X, ChevronDown } from 'lucide-react'
 import WhatsappIcon from '../components/icons/WhatsappIcon'
+
+const toFlag = (cc: string) =>
+  [...cc.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('')
+
+type Country = { name: string; iso: string; dial: string }
+
+const COUNTRIES: Country[] = [
+  { name: 'Colombia', iso: 'CO', dial: '+57' },
+  { name: 'México', iso: 'MX', dial: '+52' },
+  { name: 'Argentina', iso: 'AR', dial: '+54' },
+  { name: 'Chile', iso: 'CL', dial: '+56' },
+  { name: 'Perú', iso: 'PE', dial: '+51' },
+  { name: 'Venezuela', iso: 'VE', dial: '+58' },
+  { name: 'Ecuador', iso: 'EC', dial: '+593' },
+  { name: 'Bolivia', iso: 'BO', dial: '+591' },
+  { name: 'Paraguay', iso: 'PY', dial: '+595' },
+  { name: 'Uruguay', iso: 'UY', dial: '+598' },
+  { name: 'Brasil', iso: 'BR', dial: '+55' },
+  { name: 'Costa Rica', iso: 'CR', dial: '+506' },
+  { name: 'Panamá', iso: 'PA', dial: '+507' },
+  { name: 'Guatemala', iso: 'GT', dial: '+502' },
+  { name: 'Honduras', iso: 'HN', dial: '+504' },
+  { name: 'El Salvador', iso: 'SV', dial: '+503' },
+  { name: 'Nicaragua', iso: 'NI', dial: '+505' },
+  { name: 'República Dominicana', iso: 'DO', dial: '+1809' },
+  { name: 'Cuba', iso: 'CU', dial: '+53' },
+  { name: 'Puerto Rico', iso: 'PR', dial: '+1787' },
+  { name: 'España', iso: 'ES', dial: '+34' },
+  { name: 'Estados Unidos', iso: 'US', dial: '+1' },
+  { name: 'Canadá', iso: 'CA', dial: '+1' },
+  { name: 'Reino Unido', iso: 'GB', dial: '+44' },
+  { name: 'Francia', iso: 'FR', dial: '+33' },
+  { name: 'Alemania', iso: 'DE', dial: '+49' },
+  { name: 'Italia', iso: 'IT', dial: '+39' },
+  { name: 'Portugal', iso: 'PT', dial: '+351' },
+]
 
 const CHANNEL_ICONS: Record<ChannelType, React.ReactNode> = {
   whatsapp: <WhatsappIcon size={16} />,
@@ -77,6 +113,7 @@ function ChannelRow({
 
       {/* Recordatorios toggle */}
       <button
+        type="button"
         onClick={() => onToggle(channel.channel)}
         title={channel.receive_reminders ? 'Desactivar recordatorios' : 'Activar recordatorios'}
         className="shrink-0 text-gray-400 hover:text-blue-500 transition-colors"
@@ -88,6 +125,7 @@ function ChannelRow({
 
       {/* Delete */}
       <button
+        type="button"
         onClick={() => onDelete(channel.channel)}
         title="Eliminar canal"
         className="shrink-0 text-gray-300 hover:text-red-400 transition-colors"
@@ -106,23 +144,43 @@ export default function SettingsPage() {
 
   // Add channel form
   const [showForm, setShowForm] = useState(false)
-  const [formChannel, setFormChannel] = useState<AddableChannel>('telegram')
+  const [formChannel, setFormChannel] = useState<AddableChannel>('whatsapp')
   const [formNotifyId, setFormNotifyId] = useState('')
   const [formWebhookUrl, setFormWebhookUrl] = useState('')
   const [formIsPrimary, setFormIsPrimary] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formLoading, setFormLoading] = useState(false)
+  const [formCountryIso, setFormCountryIso] = useState('CO')
+  const [formCountryOpen, setFormCountryOpen] = useState(false)
+  const [formLocalNumber, setFormLocalNumber] = useState('')
+  const countryDropdownRef = useRef<HTMLDivElement>(null)
 
-  const load = () => {
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target as Node)) {
+        setFormCountryOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const fetchAndSetChannels = useCallback(() => {
     if (!session) return
-    setLoading(true)
     fetchChannels(session, false)
       .then(setChannels)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
+  }, [session])
+
+  const load = () => {
+    setLoading(true)
+    fetchAndSetChannels()
   }
 
-  useEffect(() => { load() }, [session]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchAndSetChannels()
+  }, [fetchAndSetChannels])
 
   const handleDelete = async (channel: ChannelType) => {
     if (!session) return
@@ -156,9 +214,12 @@ export default function SettingsPage() {
       if (formChannel === 'discord' && formWebhookUrl) {
         metadata.webhook_url = formWebhookUrl
       }
+      const isPhone = formChannel === 'whatsapp'
+      const selectedCountry = COUNTRIES.find(c => c.iso === formCountryIso) ?? COUNTRIES[0]
+      const notifyId = isPhone ? `${selectedCountry.dial}${formLocalNumber}` : formNotifyId
       await createChannel(session, {
         channel: formChannel,
-        notify_id: formNotifyId,
+        notify_id: notifyId,
         is_primary: formIsPrimary,
         receive_reminders: true,
         metadata,
@@ -166,6 +227,7 @@ export default function SettingsPage() {
       setShowForm(false)
       setFormNotifyId('')
       setFormWebhookUrl('')
+      setFormLocalNumber('')
       setFormIsPrimary(false)
       load()
     } catch (err) {
@@ -183,16 +245,16 @@ export default function SettingsPage() {
   const hasPrimaryChannel = channels.some(c => c.is_primary)
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 pt-16 sm:pt-6 max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Configuración</h1>
+        <h1 className="text-2xl font-semibold text-gray-800">Configuración</h1>
         <p className="text-sm text-gray-400 mt-0.5">Gestiona tus canales de notificación</p>
       </div>
 
       {error && (
         <div className="mb-4 px-4 py-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 flex justify-between items-start">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-2 shrink-0"><X size={14} /></button>
+          <button type="button" onClick={() => setError(null)} className="ml-2 shrink-0"><X size={14} /></button>
         </div>
       )}
 
@@ -230,6 +292,7 @@ export default function SettingsPage() {
           <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Agregar canal</h2>
           {writeAllowed && !showForm && (
             <button
+              type="button"
               onClick={() => setShowForm(true)}
               className="flex items-center gap-1.5 text-sm text-blue-500 hover:text-blue-700 font-medium"
             >
@@ -239,7 +302,7 @@ export default function SettingsPage() {
           )}
         </div>
         {!writeAllowed && (
-          <p className="text-xs text-amber-500 mb-3">Solo lectura — no puedes agregar ni eliminar canales.</p>
+          <p className="text-xs text-amber-500 mb-3">Solo lectura: no puedes agregar ni eliminar canales.</p>
         )}
 
         {showForm && (
@@ -249,13 +312,13 @@ export default function SettingsPage() {
           >
             {/* Channel type */}
             <div>
-              <label className="text-xs font-medium text-gray-500 mb-1.5 block">Canal</label>
-              <div className="flex gap-2">
+              <p className="text-xs font-medium text-gray-500 mb-1.5">Canal</p>
+              <div className="flex gap-2 flex-wrap">
                 {ADDABLE_CHANNELS.map(ch => (
                   <button
                     key={ch}
                     type="button"
-                    onClick={() => { setFormChannel(ch); setFormNotifyId(''); setFormWebhookUrl('') }}
+                    onClick={() => { setFormChannel(ch); setFormNotifyId(''); setFormWebhookUrl(''); setFormLocalNumber('') }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${formChannel === ch
                       ? 'bg-blue-50 border-blue-200 text-blue-600'
                       : 'bg-gray-50 border-gray-100 text-gray-500 hover:border-blue-100'
@@ -273,21 +336,67 @@ export default function SettingsPage() {
               <label className="text-xs font-medium text-gray-500 mb-1.5 block">
                 {NOTIFY_ID_LABELS[formChannel]}
               </label>
-              <input
-                type={formChannel === 'email' ? 'email' : 'text'}
-                value={formNotifyId}
-                onChange={e => setFormNotifyId(e.target.value)}
-                required
-                placeholder={formChannel === 'whatsapp' ? '+521234567890' : formChannel === 'telegram' ? '123456789' : formChannel === 'email' ? 'correo@ejemplo.com' : 'ID de usuario'}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
+              {formChannel === 'whatsapp' ? (
+                <div className="flex gap-2">
+                  {/* Custom country dropdown */}
+                  <div ref={countryDropdownRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setFormCountryOpen(o => !o)}
+                      className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 whitespace-nowrap"
+                    >
+                      <span className="text-base leading-none">{toFlag(formCountryIso)}</span>
+                      <span>{COUNTRIES.find(c => c.iso === formCountryIso)?.dial ?? '+57'}</span>
+                      <ChevronDown size={14} className="text-gray-400" />
+                    </button>
+                    {formCountryOpen && (
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto min-w-[220px]">
+                        {COUNTRIES.map(c => (
+                          <button
+                            key={c.iso}
+                            type="button"
+                            onClick={() => { setFormCountryIso(c.iso); setFormCountryOpen(false) }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-blue-50 transition-colors ${formCountryIso === c.iso ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
+                          >
+                            <span className="text-base leading-none">{toFlag(c.iso)}</span>
+                            <span className="flex-1">{c.name}</span>
+                            <span className="text-gray-400">{c.dial}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="tel"
+                    aria-label="Número de teléfono local"
+                    value={formLocalNumber}
+                    onChange={e => setFormLocalNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    required
+                    maxLength={10}
+                    placeholder="3001234567"
+                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
+              ) : (
+                <input
+                  type={formChannel === 'email' ? 'email' : 'text'}
+                  aria-label={NOTIFY_ID_LABELS[formChannel]}
+                  value={formNotifyId}
+                  onChange={e => setFormNotifyId(e.target.value)}
+                  required
+                  placeholder={formChannel === 'telegram' ? '123456789' : formChannel === 'email' ? 'correo@ejemplo.com' : 'ID de usuario'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              )}
             </div>
 
             {/* Discord webhook URL */}
             {formChannel === 'discord' && (
               <div>
-                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Webhook URL</label>
+                <label htmlFor="discord-webhook" className="text-xs font-medium text-gray-500 mb-1.5 block">Webhook URL</label>
                 <input
+                  id="discord-webhook"
+                  aria-label="Webhook URL de Discord"
                   type="url"
                   value={formWebhookUrl}
                   onChange={e => setFormWebhookUrl(e.target.value)}
@@ -302,6 +411,7 @@ export default function SettingsPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
+                  aria-label="Canal principal"
                   checked={formIsPrimary}
                   onChange={e => setFormIsPrimary(e.target.checked)}
                   className="rounded"
