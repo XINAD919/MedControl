@@ -11,10 +11,12 @@ declare module 'next-auth' {
     user: {
       id: string
       role: string
+      linkedPatientIds: string[]
     } & DefaultSession['user']
   }
   interface User {
     role?: string
+    linkedPatientIds?: string[]
   }
 }
 
@@ -29,11 +31,11 @@ declare module 'next-auth/jwt' {
 const API_INTERNAL = process.env.API_INTERNAL_URL ?? 'http://localhost:8000'
 const AUTH_SECRET_INTERNAL = process.env.AUTH_SECRET_INTERNAL ?? ''
 
-export async function resolveBackendUser(
+async function resolveBackendUser(
   email: string,
   provider: string,
   name?: string | null,
-): Promise<{ id: string; role: string }> {
+): Promise<{ id: string; role: string; linked_patient_ids: string[] }> {
   const res = await fetch(`${API_INTERNAL}/api/auth/oauth-user`, {
     method: 'POST',
     headers: {
@@ -46,7 +48,16 @@ export async function resolveBackendUser(
     const text = await res.text().catch(() => '')
     throw new Error(`Backend user resolution failed (${res.status}): ${text}`)
   }
-  return res.json() as Promise<{ id: string; role: string }>
+  return res.json() as Promise<{ id: string; role: string; linked_patient_ids: string[] }>
+}
+
+async function fetchLinkedPatientIds(userId: string): Promise<string[]> {
+  const res = await fetch(
+    `${API_INTERNAL}/api/family/linked-patient-ids?user_id=${userId}`,
+    { headers: { 'X-Auth-Secret': AUTH_SECRET_INTERNAL } },
+  )
+  if (!res.ok) return []
+  return res.json() as Promise<string[]>
 }
 
 const providers: NextAuthOptions['providers'] = []
@@ -93,12 +104,13 @@ export const authOptions: NextAuthOptions = {
 
         if (!res.ok) return null
 
-        const backendUser: { id: string; role: string } = await res.json()
+        const backendUser: { id: string; role: string; linked_patient_ids: string[] } = await res.json()
         return {
           id: backendUser.id,
           email: credentials.email as string,
           name: (credentials.email as string).split('@')[0],
           role: backendUser.role,
+          linkedPatientIds: backendUser.linked_patient_ids ?? [],
         }
       },
     }),
@@ -110,18 +122,24 @@ export const authOptions: NextAuthOptions = {
         if (account?.provider === 'credentials') {
           token.userId = user.id ?? ''
           token.role = user.role ?? 'USER'
+          token.linkedPatientIds = user.linkedPatientIds ?? []
         } else {
           const backendUser = await resolveBackendUser(
             user.email,
             account.provider,
             user.name,
           )
-          console.log("🚀 ~ backendUser:", backendUser)
           token.userId = backendUser.id
           token.role = backendUser.role
+          token.linkedPatientIds = backendUser.linked_patient_ids ?? []
         }
       }
-      if (token.userId && (!token.backendToken || trigger === 'signIn')) {
+      // Refrescar linkedPatientIds al hacer session.update() (p.ej. tras aceptar invitación)
+      if (trigger === 'update' && token.userId) {
+        token.linkedPatientIds = await fetchLinkedPatientIds(token.userId as string)
+        token.backendToken = undefined // forzar regeneración
+      }
+      if (token.userId && (!token.backendToken || trigger === 'signIn' || trigger === 'update')) {
         token.backendToken = await new SignJWT({ userId: token.userId, role: token.role })
           .setProtectedHeader({ alg: 'HS256' })
           .setIssuedAt()
@@ -135,6 +153,7 @@ export const authOptions: NextAuthOptions = {
     session({ session, token }: any) {
       session.user.id = (token.userId as string) ?? ''
       session.user.role = (token.role as string) ?? 'USER'
+      session.user.linkedPatientIds = (token.linkedPatientIds as string[]) ?? []
       session.accessToken = (token.backendToken as string) ?? ''
       return session
     },

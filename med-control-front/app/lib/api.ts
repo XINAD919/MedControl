@@ -1,5 +1,5 @@
 import type { Session } from 'next-auth'
-import type { AdherenceAnalysis, Channel, ChannelType, Document, Reminder, ReminderNotification } from './types'
+import type { AdherenceAnalysis, Channel, ChannelType, Document, FamilyInvitation, FamilyMember, LinkedPatient, Reminder, ReminderNotification } from './types'
 import { assertCanWrite } from './rbac'
 
 const BASE_URL = '/api/backend'
@@ -145,6 +145,80 @@ export function generateAdherenceAnalysis(
 ): Promise<AdherenceAnalysis> {
   return apiFetch<AdherenceAnalysis>(
     `/api/users/${session.user.id}/adherence-analysis?period_days=${periodDays}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+// ── Familia ───────────────────────────────────────────────────────────────────
+
+export function fetchFamilyMembers(session: Session): Promise<FamilyMember[]> {
+  return apiFetch<FamilyMember[]>('/api/family/members', session.accessToken)
+}
+
+export function fetchLinkedPatients(session: Session): Promise<LinkedPatient[]> {
+  return apiFetch<LinkedPatient[]>('/api/family/linked-patients', session.accessToken)
+}
+
+export function fetchFamilyInvitations(session: Session): Promise<FamilyInvitation[]> {
+  return apiFetch<FamilyInvitation[]>('/api/family/invitations', session.accessToken)
+}
+
+export function inviteFamilyMember(session: Session, email: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>('/api/family/invite', session.accessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+}
+
+export function removeFamilyMember(session: Session, caregiverId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/members/${caregiverId}`,
+    session.accessToken,
+    { method: 'DELETE' },
+  )
+}
+
+export function acceptInvitation(session: Session, token: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/accept/${token}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+export function rejectInvitation(session: Session, token: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/reject/${token}`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+export function sendManualReminder(
+  session: Session,
+  patientId: string,
+  reminderId: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/patients/${patientId}/reminders/${reminderId}/manual-reminder`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+export function resendInvitation(session: Session, invitationId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/invitations/${invitationId}/resend`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+export function revokeInvitation(session: Session, invitationId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/family/invitations/${invitationId}/revoke`,
     session.accessToken,
     { method: 'POST' },
   )

@@ -26,6 +26,7 @@ export interface Channel {
 }
 
 export interface ChatMessage {
+  id?: string
   role: 'user' | 'assistant'
   content: string
   document_id?: string
@@ -62,6 +63,28 @@ export interface AdherenceAnalysis {
   metrics: AdherenceMetrics
   llm_comment: string
   period_days: number
+  created_at: string
+}
+
+export interface FamilyMember {
+  caregiver_id: string
+  email: string | null
+  name: string | null
+}
+
+export interface LinkedPatient {
+  patient_id: string
+  email: string | null
+  name: string | null
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'revoked'
+
+export interface FamilyInvitation {
+  id: string
+  invited_email: string
+  status: InvitationStatus
+  expires_at: string
   created_at: string
 }
 
