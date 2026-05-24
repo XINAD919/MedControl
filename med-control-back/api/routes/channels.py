@@ -132,24 +132,31 @@ async def configure_channel(
         except ValueError:
             raise HTTPException(400, "WhatsApp notify_id debe ser un numero")
 
+    # webpush no requiere verificación manual — OneSignal lo gestiona via external_user_id
+    verified = config.channel == "webpush"
+
     await upsert_user_channel(
         user_id=user_id,
         channel=config.channel,
         notify_id=config.notify_id,
-        verified=False,
+        verified=verified,
         is_primary=config.is_primary,
         receive_reminders=config.receive_reminders,
         metadata=config.metadata,
     )
 
-    logger.info(f"User {user_id} configured channel {config.channel}")
+    logger.info(f"User {user_id} configured channel {config.channel} (verified={verified})")
 
     return {
         "status": "configured",
         "channel": config.channel,
-        "verified": False,
+        "verified": verified,
         "receive_reminders": config.receive_reminders,
-        "message": f"Canal configurado. Revisa tu {config.channel} para verificarlo.",
+        "message": (
+            "Canal Web Push configurado y listo para recibir notificaciones."
+            if verified
+            else f"Canal configurado. Revisa tu {config.channel} para verificarlo."
+        ),
     }
 
 
