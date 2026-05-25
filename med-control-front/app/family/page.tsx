@@ -384,6 +384,18 @@ export default function FamilyPage() {
                           </p>
                           <p className="text-lg font-semibold text-gray-800">{adherence.metrics.streak_days}d</p>
                         </div>
+                        <div className="bg-gray-50 rounded-xl p-3 text-center">
+                          <p className="text-xs text-gray-400 mb-1">Puntualidad</p>
+                          <p className="text-lg font-semibold text-gray-800">{Math.round(adherence.metrics.punctuality_rate * 100)}%</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3 text-center">
+                          <p className="text-xs text-gray-400 mb-1">Retraso medio</p>
+                          <p className="text-lg font-semibold text-gray-800">{Math.round(adherence.metrics.avg_delay_minutes)}<span className="text-sm font-normal text-gray-500"> min</span></p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3 text-center">
+                          <p className="text-xs text-gray-400 mb-1">Últimos 7d</p>
+                          <p className="text-lg font-semibold text-gray-800">{Math.round(adherence.metrics.recent_adherence_rate * 100)}%</p>
+                        </div>
                       </div>
 
                       {/* Comentario LLM */}
