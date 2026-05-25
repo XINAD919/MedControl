@@ -22,38 +22,34 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }, [status, push, pathname]);
 
   useEffect(() => {
-    if (session?.user?.id && typeof window !== 'undefined') {
-      OneSignal.login(session.user.id);
-    }
-  }, [session?.user?.id]);
+    if (status !== 'authenticated' || !session?.user?.id || typeof window === 'undefined') return;
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      OneSignal.init({
-        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
-        notifyButton: {
-          enable: true,
-          prenotify: true,
-          showCredit: false,
-          text: {
-            "dialog.blocked.title": "Suscripción a Notificaciones",
-            "dialog.blocked.message": "¿Quieres recibir notificaciones de recordatorios de medicamentos?",
-            "dialog.main.button.subscribe": "Suscribirse",
-            "dialog.main.button.unsubscribe": "Cancelar",
-            "dialog.main.title": "Notificaciones de Recordatorios",
-            "message.action.resubscribed": "¡Te has suscrito correctamente! Recibirás notificaciones de recordatorios.",
-            "message.action.subscribed": "¡Te has suscrito correctamente! Recibirás notificaciones de recordatorios.",
-            "message.action.unsubscribed": "Te has dado de baja de las notificaciones de recordatorios.",
-            "tip.state.subscribed": "Estás suscrito a las notificaciones de recordatorios.",
-            "tip.state.unsubscribed": "No estás suscrito a las notificaciones de recordatorios.",
-            "message.prenotify": "Recibirás notificaciones de recordatorios de medicamentos",
-            "tip.state.blocked": "Para recibir notificaciones de recordatorios, debes habilitar las notificaciones.",
-            "message.action.subscribing": "Te estamos suscribiendo a las notificaciones de recordatorios.",
-          }
+    OneSignal.init({
+      appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!,
+      notifyButton: {
+        enable: true,
+        prenotify: true,
+        showCredit: false,
+        text: {
+          "dialog.blocked.title": "Suscripción a Notificaciones",
+          "dialog.blocked.message": "¿Quieres recibir notificaciones de recordatorios de medicamentos?",
+          "dialog.main.button.subscribe": "Suscribirse",
+          "dialog.main.button.unsubscribe": "Cancelar",
+          "dialog.main.title": "Notificaciones de Recordatorios",
+          "message.action.resubscribed": "¡Te has suscrito correctamente! Recibirás notificaciones de recordatorios.",
+          "message.action.subscribed": "¡Te has suscrito correctamente! Recibirás notificaciones de recordatorios.",
+          "message.action.unsubscribed": "Te has dado de baja de las notificaciones de recordatorios.",
+          "tip.state.subscribed": "Estás suscrito a las notificaciones de recordatorios.",
+          "tip.state.unsubscribed": "No estás suscrito a las notificaciones de recordatorios.",
+          "message.prenotify": "Recibirás notificaciones de recordatorios de medicamentos",
+          "tip.state.blocked": "Para recibir notificaciones de recordatorios, debes habilitar las notificaciones.",
+          "message.action.subscribing": "Te estamos suscribiendo a las notificaciones de recordatorios.",
         }
-      });
-    }
-  }, []);
+      }
+    }).then(() => {
+      OneSignal.login(session.user.id);
+    });
+  }, [status, session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
