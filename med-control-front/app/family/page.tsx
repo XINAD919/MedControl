@@ -306,35 +306,46 @@ export default function FamilyPage() {
               </div>
 
               {/* Dosis retrasadas */}
-              {selectedPatientId && delayedReminders.length > 0 && (
+              {selectedPatientId && (
                 <div className="bg-white rounded-2xl border border-amber-100 shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-amber-50 flex items-center gap-2">
                     <AlertTriangle size={14} className="text-amber-400" />
                     <p className="text-sm font-semibold text-gray-700">Dosis retrasadas</p>
-                    <span className="ml-auto text-xs text-amber-500 font-medium">{delayedReminders.length}</span>
+                    {delayedReminders.length > 0 && (
+                      <span className="ml-auto text-xs text-amber-500 font-medium">{delayedReminders.length}</span>
+                    )}
                   </div>
-                  <div className="flex flex-col divide-y divide-gray-50">
-                    {delayedReminders.map(r => (
-                      <div key={r.reminder_id} className="px-4 py-3 flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{r.medication}</p>
-                          <p className="text-xs text-gray-400">{new Date(r.scheduled_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                  {adherenceLoading ? (
+                    <div className="px-4 py-4 flex items-center gap-2 text-gray-400 text-sm">
+                      <Loader2 size={14} className="animate-spin" />
+                      Cargando…
+                    </div>
+                  ) : delayedReminders.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-gray-400">No hay dosis retrasadas en este momento.</p>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-gray-50">
+                      {delayedReminders.map(r => (
+                        <div key={r.reminder_id} className="px-4 py-3 flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{r.medication}</p>
+                            <p className="text-xs text-gray-400">{new Date(r.scheduled_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={r.manual_reminder_sent}
+                            onClick={() => handleSendManualReminder(r.reminder_id)}
+                            className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                              r.manual_reminder_sent
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                            }`}
+                          >
+                            {r.manual_reminder_sent ? 'Enviado' : 'Recordar'}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          disabled={r.manual_reminder_sent}
-                          onClick={() => handleSendManualReminder(r.reminder_id)}
-                          className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                            r.manual_reminder_sent
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-                          }`}
-                        >
-                          {r.manual_reminder_sent ? 'Enviado' : 'Recordar'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
