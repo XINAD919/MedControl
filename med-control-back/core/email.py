@@ -1,72 +1,38 @@
 """
-Envío de correos transaccionales usando smtplib (stdlib).
-Mismas credenciales Gmail SMTP 587 que usa n8n para recordatorios.
+Envío de correos transaccionales via webhook n8n.
+n8n maneja el SMTP/Gmail directamente usando sus credenciales ya configuradas.
 
 Variables de entorno requeridas:
-  SMTP_HOST       (default: smtp.gmail.com)
-  SMTP_PORT       (default: 587)
-  SMTP_USER       correo@gmail.com
-  SMTP_PASSWORD   contraseña de aplicación Gmail
-  SMTP_FROM_NAME  (default: MedControl)
-  FRONTEND_URL    (default: http://localhost:3000)
+  EMAIL_WEBHOOK_URL   URL del webhook n8n para envío de emails
+                      (ej: https://tu-n8n.com/webhook/medai-email)
+  SMTP_FROM_NAME      (default: MedControl)
+  FRONTEND_URL        (default: http://localhost:3000)
 """
 
 import logging
 import os
-import smtplib
-import socket
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
-_SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-_SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-_SMTP_USER = os.getenv("SMTP_USER", "")
-_SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+_EMAIL_WEBHOOK_URL = os.getenv("EMAIL_WEBHOOK_URL", "")
 _FROM_NAME = os.getenv("SMTP_FROM_NAME", "MedControl")
 
 
-class _SMTP4(smtplib.SMTP):
-    """SMTP over IPv4 only — avoids ENETUNREACH on IPv6-limited hosts (e.g. Railway)."""
-    def _get_socket(self, host, port, timeout):
-        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        ip, port_n = addrs[0][4]
-        return socket.create_connection((ip, port_n), timeout, self.source_address)
-
-
-class _SMTP_SSL4(smtplib.SMTP_SSL):
-    """SMTP_SSL over IPv4 only — SSL hostname verification still uses the original hostname."""
-    def _get_socket(self, host, port, timeout):
-        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        ip, port_n = addrs[0][4]
-        sock = socket.create_connection((ip, port_n), timeout, self.source_address)
-        return self.context.wrap_socket(sock, server_hostname=self._host)
-
-
 def _send(to: str, subject: str, html: str) -> None:
-    """Envío sincrónico. Llamar desde BackgroundTask (hilo del executor de FastAPI)."""
-    if not _SMTP_USER or not _SMTP_PASSWORD:
-        logger.warning("SMTP_USER / SMTP_PASSWORD no configurados — email no enviado")
+    """Envía email via webhook n8n. Llamar desde BackgroundTask."""
+    if not _EMAIL_WEBHOOK_URL:
+        logger.warning("EMAIL_WEBHOOK_URL no configurado — email no enviado")
         return
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{_FROM_NAME} <{_SMTP_USER}>"
-    msg["To"] = to
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
     try:
-        if _SMTP_PORT == 465:
-            with _SMTP_SSL4(_SMTP_HOST, _SMTP_PORT) as server:
-                server.login(_SMTP_USER, _SMTP_PASSWORD)
-                server.sendmail(_SMTP_USER, to, msg.as_string())
-        else:
-            with _SMTP4(_SMTP_HOST, _SMTP_PORT) as server:
-                server.ehlo()
-                server.starttls()
-                server.login(_SMTP_USER, _SMTP_PASSWORD)
-                server.sendmail(_SMTP_USER, to, msg.as_string())
+        with httpx.Client(timeout=30) as client:
+            r = client.post(
+                _EMAIL_WEBHOOK_URL,
+                json={"to": to, "subject": subject, "html": html},
+            )
+            r.raise_for_status()
         logger.info(f"Email enviado a {to}: {subject}")
     except Exception as exc:
         logger.error(f"Error enviando email a {to}: {exc}")

@@ -1,0 +1,115 @@
+{
+  "name": "MedControl – Transactional Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "medai-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "medai-email-webhook"
+    },
+    {
+      "parameters": {
+        "responseCode": 200
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "MedControl <comunicacionesmedcontrol@gmail.com>",
+        "toEmail": "={{ $('Webhook').item.json.body.to }}",
+        "subject": "={{ $('Webhook').item.json.body.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $('Webhook').item.json.body.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": {
+        "smtp": {
+          "id": "vvLKML5xX9TMjzs8",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "to": "test@example.com",
+            "subject": "Invitación de cuidador/a — MedControl",
+            "html": "<h2>Hola</h2><p>Te han invitado a ser cuidador/a en MedControl.</p>"
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/medai-email",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200 OK": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e1f2a3b4-c5d6-7890-abcd-ef1234567890",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0c4f7c70fc44a45c19fc253fba6ed33ecb3324e2ee86a6541e4601f5b5d9feb8"
+  },
+  "id": "MEDCONTROLemail001",
+  "tags": [
+    {
+      "id": "PquZk9Rd7hLJ3J9x",
+      "name": "MedAI"
+    }
+  ]
+}
