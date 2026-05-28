@@ -14,6 +14,7 @@ Variables de entorno requeridas:
 import logging
 import os
 import smtplib
+import socket
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -24,6 +25,23 @@ _SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 _SMTP_USER = os.getenv("SMTP_USER", "")
 _SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 _FROM_NAME = os.getenv("SMTP_FROM_NAME", "MedControl")
+
+
+class _SMTP4(smtplib.SMTP):
+    """SMTP over IPv4 only — avoids ENETUNREACH on IPv6-limited hosts (e.g. Railway)."""
+    def _get_socket(self, host, port, timeout):
+        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        ip, port_n = addrs[0][4]
+        return socket.create_connection((ip, port_n), timeout, self.source_address)
+
+
+class _SMTP_SSL4(smtplib.SMTP_SSL):
+    """SMTP_SSL over IPv4 only — SSL hostname verification still uses the original hostname."""
+    def _get_socket(self, host, port, timeout):
+        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        ip, port_n = addrs[0][4]
+        sock = socket.create_connection((ip, port_n), timeout, self.source_address)
+        return self.context.wrap_socket(sock, server_hostname=self._host)
 
 
 def _send(to: str, subject: str, html: str) -> None:
@@ -40,20 +58,17 @@ def _send(to: str, subject: str, html: str) -> None:
 
     try:
         if _SMTP_PORT == 465:
-            logger.info(f"Connecting to {_SMTP_HOST}:{_SMTP_PORT}")
-            with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
+            with _SMTP_SSL4(_SMTP_HOST, _SMTP_PORT) as server:
                 server.login(_SMTP_USER, _SMTP_PASSWORD)
                 server.sendmail(_SMTP_USER, to, msg.as_string())
         else:
-            logger.info(f"Connecting to {_SMTP_HOST}:{_SMTP_PORT}")
-            with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
+            with _SMTP4(_SMTP_HOST, _SMTP_PORT) as server:
                 server.ehlo()
                 server.starttls()
                 server.login(_SMTP_USER, _SMTP_PASSWORD)
                 server.sendmail(_SMTP_USER, to, msg.as_string())
         logger.info(f"Email enviado a {to}: {subject}")
     except Exception as exc:
-        logger.info(f"Connecting to {_SMTP_HOST}:{_SMTP_PORT}")
         logger.error(f"Error enviando email a {to}: {exc}")
 
 

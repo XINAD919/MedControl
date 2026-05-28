@@ -418,6 +418,36 @@
     {
       "parameters": {
         "method": "POST",
+        "url": "http://172.24.66.234:8080/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "MEDAINOTIFICATIONSECRET"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  event: 'reminder.fired',\n  data: {\n    reminder_id: $('Extract Fields').item.json.reminder_id,\n    user_id: $('Extract Fields').item.json.user_id,\n    channel: $('Extract Fields').item.json.channel,\n    fired_at: $now.toISO()\n  }\n}) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "3ee3f984-cfb9-4c43-91b9-d6166751cc85",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12816,
+        5792
+      ],
+      "notes": "Notifica al backend que el recordatorio fue enviado (por canal)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
         "url": "http://172.24.66.234:4001/api/sendText",
         "sendHeaders": true,
         "headerParameters": {
@@ -440,44 +470,121 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        12144,
+        12384,
         6192
       ],
       "id": "c41d0e3c-b60a-4df0-9825-3dfc13405741",
-      "name": "HTTP Request"
+      "name": "Send Whatsapp Message"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "http://172.24.66.234:8080/webhooks/n8n",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "assignments": {
+          "assignments": [
             {
-              "name": "X-Api-Key",
-              "value": "MEDAINOTIFICATIONSECRET"
+              "id": "dbbce358-3e84-48bb-9e81-332caaa8b9de",
+              "name": "reminder_id",
+              "value": "={{ $json.reminder_id }}",
+              "type": "string"
+            },
+            {
+              "id": "bcce46b5-c7ef-4804-8c09-11a3f5ee0103",
+              "name": "user_id",
+              "value": "={{ $json.user_id }}",
+              "type": "string"
+            },
+            {
+              "id": "47552573-0924-4558-be38-42c646f9c5db",
+              "name": "medication",
+              "value": "={{ $json.medication }}",
+              "type": "string"
+            },
+            {
+              "id": "c1b1f0fd-0318-43ec-95e9-790a2b471ccf",
+              "name": "message",
+              "value": "={{ $json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "460fff2d-3b10-4a28-ae6e-f757e435c183",
+              "name": "notes",
+              "value": "={{ $json.notes }}",
+              "type": "string"
+            },
+            {
+              "id": "b0a22b1c-cbe2-4da0-a475-6fb3e3bd2626",
+              "name": "channel",
+              "value": "={{ $json.channel }}",
+              "type": "string"
+            },
+            {
+              "id": "07b4066d-b955-445f-a7b5-8f4db0d176d2",
+              "name": "notify_id",
+              "value": "={{ $json.notify_id.split('+')[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "ab25ccc0-01f7-4842-987a-d2b7c6a145ea",
+              "name": "scheduled_at",
+              "value": "={{ $json.scheduled_at }}",
+              "type": "string"
+            },
+            {
+              "id": "4fd0806a-0e65-439c-9256-f8359c883350",
+              "name": "metadata",
+              "value": "={{ $json.metadata }}",
+              "type": "object"
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  event: 'reminder.fired',\n  data: {\n    reminder_id: $json.reminder_id,\n    user_id: $json.user_id,\n    channel: $json.channel,\n    fired_at: $now.toISO()\n  }\n}) }}",
-        "options": {
-          "timeout": 5000
-        }
+        "options": {}
       },
-      "id": "3ee3f984-cfb9-4c43-91b9-d6166751cc85",
-      "name": "Callback to Backend",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        12816,
-        5792
+        12144,
+        6192
       ],
-      "notes": "Notifica al backend que el recordatorio fue enviado (por canal)"
+      "id": "c3f30429-3de2-43d3-8031-6df5bb54d248",
+      "name": "Normalize Data"
     }
   ],
-  "pinData": {},
+  "pinData": {
+    "Webhook Entry": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json",
+            "user-agent": "PostmanRuntime/7.54.0",
+            "accept": "*/*",
+            "cache-control": "no-cache",
+            "postman-token": "8671effd-9a1a-4896-bd44-86b469110cc6",
+            "host": "localhost:5678",
+            "accept-encoding": "gzip, deflate, br",
+            "connection": "keep-alive",
+            "content-length": "430"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "reminder_id": "rem_c9de4b54_1779654900",
+            "user_id": "c9de4b54-fa8c-4130-a103-f31c5d0ad838",
+            "medication": "Acetaminofén",
+            "message": "Hola, es hora de tomar tu dosis de Acetaminofén. Recuerda tomarla con agua y evitar el alcohol.",
+            "notes": "con agua, evitar alcohol",
+            "channel": "email",
+            "notify_id": "da_919@hotmail.com",
+            "scheduled_at": "2026-05-24T20:35:00",
+            "metadata": {}
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/medai-reminder",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
   "connections": {
     "Webhook Entry": {
       "main": [
@@ -555,7 +662,7 @@
         ],
         [
           {
-            "node": "HTTP Request",
+            "node": "Normalize Data",
             "type": "main",
             "index": 0
           }
@@ -639,11 +746,22 @@
         ]
       ]
     },
-    "HTTP Request": {
+    "Send Whatsapp Message": {
       "main": [
         [
           {
             "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Data": {
+      "main": [
+        [
+          {
+            "node": "Send Whatsapp Message",
             "type": "main",
             "index": 0
           }
@@ -657,7 +775,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "b810ddf3-53b0-4504-a2b7-8a5b08361af0",
+  "versionId": "ba939137-e3a3-47eb-9b4f-2a43bf5ade2d",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "0c4f7c70fc44a45c19fc253fba6ed33ecb3324e2ee86a6541e4601f5b5d9feb8"
