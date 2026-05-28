@@ -90,6 +90,16 @@ export interface FamilyInvitation {
   created_at: string
 }
 
+export interface MedicationSummary {
+  medication: string
+  taken: number
+  missed: number
+  total_due: number
+  has_missed: boolean
+  is_recurring: boolean
+  remaining_doses: number | null  // null = continuo o no recurrente
+}
+
 export interface ReminderNotification {
   id: string
   reminder_id: string

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { UserPlus, Trash2, Mail, Users, Clock, CheckCircle, XCircle, RefreshCw, Ban, TrendingUp, TrendingDown, Minus, Flame, BarChart2, Loader2, AlertTriangle } from 'lucide-react'
+import { UserPlus, Trash2, Mail, Users, Clock, CheckCircle, XCircle, RefreshCw, Ban, TrendingUp, TrendingDown, Minus, Flame, BarChart2, Loader2, AlertTriangle, Pill } from 'lucide-react'
 import {
   fetchFamilyMembers,
   fetchLinkedPatients,
@@ -14,10 +14,11 @@ import {
   fetchPatientAdherenceAnalysis,
   generatePatientAdherenceAnalysis,
   fetchPatientDelayedReminders,
+  fetchPatientMedicationsSummary,
   sendManualReminder,
   type DelayedReminder,
 } from '../lib/api'
-import type { AdherenceAnalysis, FamilyMember, FamilyInvitation, InvitationStatus, LinkedPatient } from '../lib/types'
+import type { AdherenceAnalysis, FamilyMember, FamilyInvitation, InvitationStatus, LinkedPatient, MedicationSummary } from '../lib/types'
 
 type TabId = 'dashboard' | 'familiares'
 
@@ -140,6 +141,7 @@ export default function FamilyPage() {
   const [adherenceLoading, setAdherenceLoading] = useState(false)
   const [generatingAnalysis, setGeneratingAnalysis] = useState(false)
   const [delayedReminders, setDelayedReminders] = useState<DelayedReminder[]>([])
+  const [medicationSummary, setMedicationSummary] = useState<MedicationSummary[]>([])
 
   // Tab 2 state
   const [members, setMembers] = useState<FamilyMember[]>([])
@@ -189,13 +191,16 @@ export default function FamilyPage() {
     setSelectedPatientId(patientId)
     setAdherence(null)
     setDelayedReminders([])
+    setMedicationSummary([])
     setAdherenceLoading(true)
     Promise.all([
       fetchPatientAdherenceAnalysis(session, patientId).catch(() => null),
       fetchPatientDelayedReminders(session, patientId).catch(() => []),
-    ]).then(([a, d]) => {
+      fetchPatientMedicationsSummary(session, patientId).catch(() => []),
+    ]).then(([a, d, m]) => {
       setAdherence(a)
       setDelayedReminders(d)
+      setMedicationSummary(m)
     }).finally(() => setAdherenceLoading(false))
   }
 
@@ -342,6 +347,55 @@ export default function FamilyPage() {
                           >
                             {r.manual_reminder_sent ? 'Enviado' : 'Recordar'}
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Panel de medicamentos */}
+              {selectedPatientId && (
+                <div className="bg-white rounded-2xl border border-blue-50 shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-blue-50 flex items-center gap-2">
+                    <Pill size={14} className="text-blue-400" />
+                    <p className="text-sm font-semibold text-gray-700">Medicamentos</p>
+                    {medicationSummary.length > 0 && (
+                      <span className="ml-auto text-xs text-blue-400 font-medium">{medicationSummary.length}</span>
+                    )}
+                  </div>
+                  {adherenceLoading ? (
+                    <div className="px-4 py-4 flex items-center gap-2 text-gray-400 text-sm">
+                      <Loader2 size={14} className="animate-spin" />
+                      Cargando…
+                    </div>
+                  ) : medicationSummary.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-gray-400">No hay medicamentos registrados en los últimos 30 días.</p>
+                  ) : (
+                    <div className="flex flex-col divide-y divide-gray-50">
+                      {medicationSummary.map(med => (
+                        <div key={med.medication} className="px-4 py-3 flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{med.medication}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{med.taken}/{med.total_due} dosis tomadas</p>
+                            {med.is_recurring && (
+                              <p className="text-xs text-blue-400 mt-0.5">
+                                {med.remaining_doses === null
+                                  ? 'Tratamiento continuo'
+                                  : `${med.remaining_doses} dosis restantes`}
+                              </p>
+                            )}
+                          </div>
+                          <div className="shrink-0 flex items-center gap-1 mt-0.5">
+                            {med.has_missed ? (
+                              <>
+                                <AlertTriangle size={13} className="text-amber-400" />
+                                <span className="text-xs text-amber-500 font-medium">{med.missed} omitida{med.missed !== 1 ? 's' : ''}</span>
+                              </>
+                            ) : (
+                              <CheckCircle size={14} className="text-green-400" />
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

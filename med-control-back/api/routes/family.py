@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import secrets
@@ -14,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from core import db
 from core.email import send_invitation_existing_user, send_invitation_new_user
+from core.recurrence import calculate_next_occurrence
 from deps import CurrentUser, get_current_user
 
 router = APIRouter()
@@ -285,6 +287,46 @@ class DelayedReminderOut(BaseModel):
     manual_reminder_sent: bool
 
 
+class MedicationSummaryOut(BaseModel):
+    medication: str
+    taken: int
+    missed: int
+    total_due: int
+    has_missed: bool
+    is_recurring: bool
+    remaining_doses: Optional[int] = None  # None = continuo o no recurrente
+
+
+def _count_remaining_doses(
+    recurrence_type: str,
+    recurrence_interval: int,
+    recurrence_days: Optional[str],  # JSON string "[1,3,5]"
+    recurrence_end_date: Optional[str],  # ISO string from DB
+) -> Optional[int]:
+    """Cuenta las dosis futuras restantes iterando calculate_next_occurrence.
+    Retorna None si el tratamiento es continuo (sin fecha de fin)."""
+    if recurrence_end_date is None:
+        return None
+
+    end_dt = datetime.fromisoformat(str(recurrence_end_date).replace("Z", "+00:00"))
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+    days_list = json.loads(recurrence_days) if recurrence_days else None
+    now = datetime.now(timezone.utc)
+    count = 0
+    current = now
+
+    while True:
+        nxt = calculate_next_occurrence(current, recurrence_type, days_list, recurrence_interval, end_dt)
+        if nxt is None or nxt > end_dt:
+            break
+        count += 1
+        current = nxt
+
+    return count
+
+
 @router.get("/family/patients/{patient_id}/delayed-reminders", response_model=list[DelayedReminderOut], tags=["Family"])
 async def get_patient_delayed_reminders(
     patient_id: str,
@@ -400,6 +442,74 @@ async def _dispatch_manual_reminder(
                 await http.post(webhook_url, json=payload)
             except Exception as e:
                 logger.error(f"Error al enviar recordatorio manual: {e}")
+
+
+@router.get("/family/patients/{patient_id}/medications-summary", response_model=list[MedicationSummaryOut], tags=["Family"])
+async def get_patient_medications_summary(
+    patient_id: str,
+    period_days: int = 30,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Lista de medicamentos del paciente con dosis tomadas/omitidas y dosis restantes para recurrentes."""
+    if not await db.is_caregiver_of(current_user.user_id, patient_id):
+        raise HTTPException(status_code=403, detail="No eres cuidador de este paciente")
+
+    now = datetime.now(timezone.utc)
+
+    # Dosis pasadas del período (excluye privadas)
+    reminders = await db.get_reminders_for_adherence(patient_id, period_days, exclude_private=True)
+
+    # Info de recurrencia por medicamento (más reciente por medicamento)
+    recurrence_info = await db.get_patient_medications_recurrence_info(patient_id)
+    recurrence_by_med: dict[str, dict] = {r["medication"]: r for r in recurrence_info}
+
+    # Agregar por medicamento
+    aggregated: dict[str, dict] = {}
+    for r in reminders:
+        med = r["medication"]
+        if med not in aggregated:
+            aggregated[med] = {"taken": 0, "missed": 0}
+
+        scheduled_raw = str(r["scheduled_at"]).replace("Z", "+00:00")
+        scheduled_dt = datetime.fromisoformat(scheduled_raw)
+        if scheduled_dt.tzinfo is None:
+            scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
+
+        if r["taken"]:
+            aggregated[med]["taken"] += 1
+        elif scheduled_dt < now:
+            aggregated[med]["missed"] += 1
+
+    # Construir resultado
+    result: list[MedicationSummaryOut] = []
+    for med, counts in aggregated.items():
+        taken = counts["taken"]
+        missed = counts["missed"]
+        rec = recurrence_by_med.get(med, {})
+        is_recurring = bool(rec.get("is_recurring", False))
+
+        remaining_doses: Optional[int] = None
+        if is_recurring:
+            remaining_doses = _count_remaining_doses(
+                recurrence_type=rec.get("recurrence_type") or "daily",
+                recurrence_interval=rec.get("recurrence_interval") or 1,
+                recurrence_days=rec.get("recurrence_days"),
+                recurrence_end_date=rec.get("recurrence_end_date"),
+            )
+
+        result.append(MedicationSummaryOut(
+            medication=med,
+            taken=taken,
+            missed=missed,
+            total_due=taken + missed,
+            has_missed=missed > 0,
+            is_recurring=is_recurring,
+            remaining_doses=remaining_doses,
+        ))
+
+    # Ordenar: con omitidas primero, luego alfabético
+    result.sort(key=lambda x: (not x.has_missed, x.medication))
+    return result
 
 
 @router.get("/family/linked-patient-ids", tags=["Family"])

@@ -1,5 +1,5 @@
 import type { Session } from 'next-auth'
-import type { AdherenceAnalysis, Channel, ChannelType, Document, FamilyInvitation, FamilyMember, LinkedPatient, Reminder, ReminderNotification } from './types'
+import type { AdherenceAnalysis, Channel, ChannelType, Document, FamilyInvitation, FamilyMember, LinkedPatient, MedicationSummary, Reminder, ReminderNotification } from './types'
 import { assertCanWrite } from './rbac'
 
 const BASE_URL = '/api/backend'
@@ -262,6 +262,17 @@ export function sendManualReminder(
     `/api/family/patients/${patientId}/reminders/${reminderId}/manual-reminder`,
     session.accessToken,
     { method: 'POST' },
+  )
+}
+
+export function fetchPatientMedicationsSummary(
+  session: Session,
+  patientId: string,
+  periodDays = 30,
+): Promise<MedicationSummary[]> {
+  return apiFetch<MedicationSummary[]>(
+    `/api/family/patients/${patientId}/medications-summary?period_days=${periodDays}`,
+    session.accessToken,
   )
 }
 

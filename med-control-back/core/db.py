@@ -657,3 +657,24 @@ async def insert_manual_reminder_send(reminder_id: str, caregiver_id: str, patie
         "caregiver_id": caregiver_id,
         "patient_id": patient_id,
     }).execute()
+
+
+async def get_patient_medications_recurrence_info(patient_id: str) -> list[dict]:
+    """Devuelve info de recurrencia por medicamento (no privado) del paciente.
+    Una entrada por medicamento, con los datos del recordatorio más reciente."""
+    client = get_supabase()
+    res = await (
+        client.table("reminders")
+        .select("medication, is_recurring, recurrence_type, recurrence_interval, recurrence_days, recurrence_end_date")
+        .eq("user_id", patient_id)
+        .eq("is_private", False)
+        .order("scheduled_at", desc=True)
+        .execute()
+    )
+    # Keep first occurrence per medication (most recent first due to ordering)
+    seen: dict[str, dict] = {}
+    for row in (res.data or []):
+        med = row["medication"]
+        if med not in seen:
+            seen[med] = row
+    return list(seen.values())

@@ -27,7 +27,7 @@ function AssistantBubble({ content, streaming }: { content: string; streaming?: 
       <div className="shrink-0 size-7 bg-blue-500 rounded-full flex items-center justify-center mb-0.5">
         <Bot size={14} className="text-white" />
       </div>
-      <div className="max-w-[75%] bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 text-sm shadow-sm border border-blue-50 leading-relaxed">
+      <div className="max-w-[90%] sm:max-w-[75%] bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 text-sm shadow-sm border border-blue-50 leading-relaxed">
         {content ? (
           <div className="md-prose"><ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown></div>
         ) : streaming ? (
