@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { fetchChannels, createChannel, deleteChannel, toggleChannelReminders } from '../lib/api'
 import { canWrite } from '../lib/rbac'
 import type { Channel, ChannelType } from '../lib/types'
-import { Send, Mail, Hash, Bell, Phone, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X, ChevronDown } from 'lucide-react'
+import { Send, Mail, Hash, Bell, Phone, CheckCircle, AlertCircle, Trash2, ToggleLeft, ToggleRight, Plus, X, ChevronDown, ExternalLink } from 'lucide-react'
 import WhatsappIcon from '../components/icons/WhatsappIcon'
 
 const toFlag = (cc: string) =>
@@ -336,6 +336,21 @@ export default function SettingsPage() {
               <label className="text-xs font-medium text-gray-500 mb-1.5 block">
                 {NOTIFY_ID_LABELS[formChannel]}
               </label>
+              {formChannel === 'telegram' && (
+                <p className="text-xs text-gray-400 mb-1.5">
+                  Para obtener tu Chat ID: abre{' '}
+                  <a
+                    href="https://t.me/userinfobot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-0.5 font-medium"
+                  >
+                    @userinfobot
+                    <ExternalLink size={11} />
+                  </a>
+                  {' '}en Telegram, presiona <strong>Start</strong> y copia el número que te envía.
+                </p>
+              )}
               {formChannel === 'whatsapp' ? (
                 <div className="flex gap-2">
                   {/* Custom country dropdown */}
