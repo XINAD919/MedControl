@@ -18,6 +18,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (status === 'unauthenticated' && !PUBLIC_ROUTES.includes(pathname)) {
       push('/login');
+    } else if (status === 'authenticated' && PUBLIC_ROUTES.includes(pathname)) {
+      push('/');
     }
   }, [status, push, pathname]);
 
