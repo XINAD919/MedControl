@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import secrets
 from datetime import datetime, timedelta
 
 import httpx
@@ -14,6 +15,12 @@ _LOOKAHEAD_SECONDS = 60
 
 log = structlog.get_logger()
 scheduler = AsyncIOScheduler(timezone="UTC")
+
+
+def _generate_next_reminder_id(user_id: str, next_dt: datetime) -> str:
+    uid_prefix = user_id.replace("-", "")[:8]
+    suffix = secrets.token_hex(6)
+    return f"rem_{uid_prefix}_{suffix}"
 
 
 async def check_due_reminders() -> None:
@@ -93,7 +100,14 @@ async def _process_group(reminder: dict, notifs: list[dict], webhook_url: str) -
         log.warning("scheduler.n8n_not_configured", reminder_id=reminder_id)
 
     if reminder.get("is_recurring"):
-        await _schedule_next(reminder, notifs)
+        try:
+            await _schedule_next(reminder, notifs)
+        except Exception as e:
+            log.error(
+                "scheduler.schedule_next_failed",
+                reminder_id=reminder_id,
+                error=str(e),
+            )
 
     await _update_status_bulk(reminder_id, "completed")
 
