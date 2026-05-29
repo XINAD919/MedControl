@@ -550,17 +550,16 @@ TOOLS = [
         "function": {
             "name": "create_reminder",
             "description": (
-                "Crea un recordatorio de medicamento enviando los datos a n8n, "
-                "que se encarga de programar y enviar la notificación al usuario. "
-                "Úsala cuando el usuario pida recordar tomar un medicamento a una hora específica, "
-                "ya sea una sola vez o de forma recurrente."
+                "Crea un recordatorio de salud para el usuario o un familiar. "
+                "Úsala para medicamentos, citas médicas, chequeos, análisis u otros eventos de salud. "
+                "El recordatorio siempre se registra en la cuenta del usuario autenticado."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "medication": {
                         "type": "string",
-                        "description": "Nombre del medicamento a recordar.",
+                        "description": "Asunto del recordatorio: nombre del medicamento, tipo de cita (ej. 'Cita cardiólogo - mamá'), u otro evento de salud.",
                     },
                     "schedule": {
                         "type": "string",

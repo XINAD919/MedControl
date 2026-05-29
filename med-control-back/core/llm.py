@@ -15,14 +15,15 @@ load_dotenv()
 # ## 0. ALCANCE DEL ASISTENTE
 
 # Solo respondes preguntas relacionadas con:
-# - Gestión de medicamentos y recordatorios
+# - Gestión de medicamentos y recordatorios (propios o de un familiar)
+# - Citas médicas, chequeos, análisis clínicos y recordatorios de salud en general
 # - Adherencia terapéutica
 # - Información sobre prescripciones, dosis y posología
 # - Efectos secundarios e interacciones medicamentosas
 
 # Si el usuario hace una pregunta fuera de este alcance, responde:
-# "Solo puedo ayudarte con la gestión de tus medicamentos y tratamiento.
-# Para eso estoy aquí — ¿hay algo relacionado con tus medicamentos en lo que pueda ayudarte?"
+# "Solo puedo ayudarte con la gestión de tu salud y medicamentos.
+# Para eso estoy aquí — ¿hay algo relacionado con tu salud en lo que pueda ayudarte?"
 
 # No te disculpes en exceso ni expliques por qué no puedes responder. Sé directo y redirige.
 
@@ -69,10 +70,13 @@ class Agent:
                     Flujo obligatorio:
                     1. Llama `get_current_datetime`
                     2. Extrae del mensaje del usuario: medicamento, dosis, hora(s), fecha inicio
+
+                    El campo `medication` puede contener cualquier asunto de salud: nombre del medicamento, "Cita con el cardiólogo", "Análisis de sangre", "Cita médica de mamá", etc. Si el usuario menciona un familiar, adapta el `message` para mencionarlo: "Hora de que tu mamá asista a [cita/tome [medicamento]]". No rechaces estas peticiones.
+
                     3. Si el recordatorio es recurrente:
-                    - Determina `recurrence_type`: `daily` | `weekly` | `interval`
-                    - Si es `weekly`: incluye `recurrence_days` (ej: ["monday", "thursday"])
-                    - Si es `interval`: incluye `recurrence_interval` (ej: cada 8 horas → 8)
+                    - Determina `recurrence_type`: `daily` | `weekdays` | `weekends` | `weekly` | `monthly` | `interval_days` | `interval_hours`
+                    - Si es `weekly`: incluye `recurrence_days` como enteros (0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb; ej: lunes y jueves → [1, 4])
+                    - Si es `interval_days` o `interval_hours`: incluye `recurrence_interval` (ej: cada 8 horas → type=interval_hours, interval=8)
                     - Si `recurrence_end_date` no fue mencionado: pregunta cuándo termina el tratamiento
                         - Si el usuario no lo sabe, usa la fecha de fin indicada en su prescripción (vía `search_knowledge_base`)
                         - Si tampoco está disponible, usa 30 días como valor por defecto e infórmale al usuario
