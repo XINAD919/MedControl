@@ -2,11 +2,18 @@ import asyncio
 import concurrent.futures
 import json
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
 _TZ = ZoneInfo(os.getenv("TIMEZONE", "UTC"))
+
+
+def _generate_reminder_id(user_id: str) -> str:
+    uid_prefix = user_id.replace("-", "")[:8]
+    suffix = secrets.token_hex(6)
+    return f"rem_{uid_prefix}_{suffix}"
 
 
 # ── Async helpers for new tools ────────────────────────────────────────────
@@ -262,7 +269,7 @@ def create_reminder(
             errors.append(f"Horario '{time_str}': formato inválido (se esperaba HH:MM)")
             continue
 
-        reminder_id = f"rem_{user_id.replace('-', '')[:8]}_{int(target.timestamp())}"
+        reminder_id = _generate_reminder_id(user_id)
 
         tasks.append({
             "user_id": user_id,
