@@ -346,7 +346,7 @@ export default function SettingsPage() {
                     className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-0.5 font-medium"
                   >
                     @userinfobot
-                    <ExternalLink size={11} className="inline" />
+                    <ExternalLink size={11} />
                   </a>
                   {' '}en Telegram, presiona <strong>Start</strong> y copia el número que te envía.
                 </p>
