@@ -684,9 +684,9 @@ TOOLS = [
         "function": {
             "name": "update_reminder",
             "description": (
-                "Crea un recordatorio de medicamento enviando los datos a n8n, "
-                "que se encarga de programar y enviar la notificación al usuario. "
-                "Úsala cuando el usuario pida recordar tomar un medicamento a una hora específica."
+                "Actualiza uno o más campos de un recordatorio existente. "
+                "Úsala cuando el usuario pida modificar la hora, medicamento, mensaje, notas o recurrencia "
+                "de un recordatorio ya creado. Llama list_reminders primero para obtener el reminder_id."
             ),
             "parameters": {
                 "type": "object",
