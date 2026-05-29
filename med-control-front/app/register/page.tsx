@@ -6,8 +6,8 @@ import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 function RegisterForm() {
-  const { get } = useSearchParams()
-  const caregiverToken = get('caregiver_token')
+  const searchParams = useSearchParams()
+  const caregiverToken = searchParams.get('caregiver_token')
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
