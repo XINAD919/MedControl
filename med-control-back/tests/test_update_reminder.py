@@ -22,6 +22,7 @@ async def test_update_includes_recurrence_type():
             recurrence_type="daily",
         )
 
+    mock_client.table.return_value.update.assert_called_once()
     update_arg = mock_client.table.return_value.update.call_args[0][0]
     assert "recurrence_type" in update_arg
     assert update_arg["recurrence_type"] == "daily"
@@ -49,6 +50,7 @@ async def test_update_sets_is_recurring_true_when_recurrence_type_set():
             recurrence_end_date="2025-12-31",
         )
 
+    mock_client.table.return_value.update.assert_called_once()
     update_arg = mock_client.table.return_value.update.call_args[0][0]
     assert update_arg.get("is_recurring") is True
 

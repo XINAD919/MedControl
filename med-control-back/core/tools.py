@@ -168,8 +168,7 @@ async def _update_user_reminder(
         updates["recurrence_type"] = recurrence_type
         updates["is_recurring"] = True
     if recurrence_days is not None:
-        import json as _json
-        updates["recurrence_days"] = _json.dumps(recurrence_days)
+        updates["recurrence_days"] = json.dumps(recurrence_days)
     if recurrence_interval is not None:
         updates["recurrence_interval"] = recurrence_interval
     if recurrence_end_date is not None:
@@ -711,9 +710,9 @@ TOOLS = [
         "function": {
             "name": "update_reminder",
             "description": (
-                "Crea un recordatorio de medicamento enviando los datos a n8n, "
-                "que se encarga de programar y enviar la notificación al usuario. "
-                "Úsala cuando el usuario pida recordar tomar un medicamento a una hora específica."
+                "Actualiza uno o más campos de un recordatorio existente. "
+                "Úsala cuando el usuario pida modificar la hora, medicamento, mensaje, notas o recurrencia "
+                "de un recordatorio ya creado. Llama list_reminders primero para obtener el reminder_id."
             ),
             "parameters": {
                 "type": "object",
@@ -747,8 +746,8 @@ TOOLS = [
                     },
                     "recurrence_days": {
                         "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Días de la semana para recurrencia weekly (ej: ['monday', 'thursday']).",
+                        "items": {"type": "integer"},
+                        "description": "Días de la semana para recurrencia weekly (0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb).",
                     },
                     "recurrence_interval": {
                         "type": "integer",
