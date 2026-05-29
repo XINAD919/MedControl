@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import secrets
 from datetime import datetime, timedelta
 
 import httpx
@@ -8,7 +9,6 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from core.recurrence import calculate_next_occurrence
-from core.supabase_client import create_temp_client
 
 _LOOKAHEAD_SECONDS = 60
 
@@ -16,7 +16,14 @@ log = structlog.get_logger()
 scheduler = AsyncIOScheduler(timezone="UTC")
 
 
+def _generate_next_reminder_id(user_id: str, next_dt: datetime) -> str:
+    uid_prefix = user_id.replace("-", "")[:8]
+    suffix = secrets.token_hex(6)
+    return f"rem_{uid_prefix}_{suffix}"
+
+
 async def check_due_reminders() -> None:
+    from core.supabase_client import create_temp_client
     now = datetime.utcnow()
     lookahead = now + timedelta(seconds=_LOOKAHEAD_SECONDS)
     client = await create_temp_client()
@@ -93,7 +100,14 @@ async def _process_group(reminder: dict, notifs: list[dict], webhook_url: str) -
         log.warning("scheduler.n8n_not_configured", reminder_id=reminder_id)
 
     if reminder.get("is_recurring"):
-        await _schedule_next(reminder, notifs)
+        try:
+            await _schedule_next(reminder, notifs)
+        except Exception as e:
+            log.error(
+                "scheduler.schedule_next_failed",
+                reminder_id=reminder_id,
+                error=str(e),
+            )
 
     await _update_status_bulk(reminder_id, "completed")
 
@@ -125,8 +139,7 @@ async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
         log.info("scheduler.recurrence_ended", reminder_id=reminder["reminder_id"])
         return
 
-    uid = reminder["user_id"].replace("-", "")[:8]
-    new_reminder_id = f"rem_{uid}_{int(next_dt.timestamp())}"
+    new_reminder_id = _generate_next_reminder_id(reminder["user_id"], next_dt)
 
     new_reminder = {
         "reminder_id": new_reminder_id,
@@ -156,6 +169,7 @@ async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
         for notif in notifs
     ]
 
+    from core.supabase_client import create_temp_client
     client = await create_temp_client()
     try:
         await client.table("reminders").upsert([new_reminder], on_conflict="reminder_id").execute()
@@ -169,6 +183,7 @@ async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
 
 
 async def _update_status_bulk(reminder_id: str, status: str) -> None:
+    from core.supabase_client import create_temp_client
     client = await create_temp_client()
     try:
         await client.table("reminders").update({"status": status}).eq("reminder_id", reminder_id).execute()
@@ -182,6 +197,7 @@ _MISSED_DOSE_WINDOW_MINUTES = 20
 
 async def check_missed_doses() -> None:
     """Detecta dosis no tomadas 20 min después de su hora y alerta a los caregivers."""
+    from core.supabase_client import create_temp_client
     now = datetime.utcnow()
     cutoff = now - timedelta(minutes=_MISSED_DOSE_WINDOW_MINUTES)
 
