@@ -150,6 +150,10 @@ async def _update_user_reminder(
     schedule: Optional[str] = None,
     message: Optional[str] = None,
     notes: Optional[str] = None,
+    recurrence_type: Optional[str] = None,
+    recurrence_days: Optional[list] = None,
+    recurrence_interval: Optional[int] = None,
+    recurrence_end_date: Optional[str] = None,
 ) -> None:
     updates = {}
     if medication:
@@ -160,6 +164,15 @@ async def _update_user_reminder(
         updates["message"] = message
     if notes:
         updates["notes"] = notes
+    if recurrence_type is not None:
+        updates["recurrence_type"] = recurrence_type
+        updates["is_recurring"] = True
+    if recurrence_days is not None:
+        updates["recurrence_days"] = json.dumps(recurrence_days)
+    if recurrence_interval is not None:
+        updates["recurrence_interval"] = recurrence_interval
+    if recurrence_end_date is not None:
+        updates["recurrence_end_date"] = recurrence_end_date
     if not updates:
         return
 
@@ -490,6 +503,10 @@ def update_reminder(
     schedule: Optional[str] = None,
     message: Optional[str] = None,
     notes: Optional[str] = None,
+    recurrence_type: Optional[str] = None,
+    recurrence_days: Optional[list] = None,
+    recurrence_interval: Optional[int] = None,
+    recurrence_end_date: Optional[str] = None,
 ):
 
     if not user_id:
@@ -505,7 +522,8 @@ def update_reminder(
             executor.submit(
                 asyncio.run,
                 _update_user_reminder(
-                    reminder_id, user_id, medication, schedule, message, notes
+                    reminder_id, user_id, medication, schedule, message, notes,
+                    recurrence_type, recurrence_days, recurrence_interval, recurrence_end_date,
                 ),
             ).result(timeout=10)
     except Exception as e:
@@ -692,9 +710,9 @@ TOOLS = [
         "function": {
             "name": "update_reminder",
             "description": (
-                "Crea un recordatorio de medicamento enviando los datos a n8n, "
-                "que se encarga de programar y enviar la notificación al usuario. "
-                "Úsala cuando el usuario pida recordar tomar un medicamento a una hora específica."
+                "Actualiza uno o más campos de un recordatorio existente. "
+                "Úsala cuando el usuario pida modificar la hora, medicamento, mensaje, notas o recurrencia "
+                "de un recordatorio ya creado. Llama list_reminders primero para obtener el reminder_id."
             ),
             "parameters": {
                 "type": "object",
@@ -718,6 +736,26 @@ TOOLS = [
                     "notes": {
                         "type": "string",
                         "description": "Instrucciones especiales de toma, ej. 'con agua', 'antes de comer'.",
+                    },
+                    "recurrence_type": {
+                        "type": "string",
+                        "description": (
+                            "Nuevo patrón de recurrencia: 'daily', 'weekdays', 'weekends', 'weekly', "
+                            "'monthly', 'interval_days', 'interval_hours'."
+                        ),
+                    },
+                    "recurrence_days": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Días de la semana para recurrencia weekly (0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb).",
+                    },
+                    "recurrence_interval": {
+                        "type": "integer",
+                        "description": "Intervalo de recurrencia en días u horas (para interval_days / interval_hours).",
+                    },
+                    "recurrence_end_date": {
+                        "type": "string",
+                        "description": "Nueva fecha de fin del tratamiento en formato YYYY-MM-DD.",
                     },
                 },
                 "required": ["reminder_id"],
