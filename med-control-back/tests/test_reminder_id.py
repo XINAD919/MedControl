@@ -2,7 +2,7 @@ from core.tools import _generate_reminder_id
 
 
 def test_reminder_id_unique_for_same_user():
-    """Two IDs for the same user must differ (no timestamp collision)."""
+    """Two IDs for the same user must differ (random suffix guarantees this)."""
     id1 = _generate_reminder_id("11111111-1111-1111-1111-111111111111")
     id2 = _generate_reminder_id("11111111-1111-1111-1111-111111111111")
     assert id1 != id2
