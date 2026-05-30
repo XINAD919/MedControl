@@ -722,7 +722,7 @@ TOOLS = [
                     },
                     "medication": {
                         "type": "string",
-                        "description": "Nombre del medicamento a recordar.",
+                        "description": "Asunto del recordatorio: nombre del medicamento, tipo de cita u otro evento de salud.",
                     },
                     "schedule": {
                         "type": "string",

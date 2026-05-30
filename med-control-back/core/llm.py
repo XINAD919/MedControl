@@ -69,7 +69,11 @@ class Agent:
                     ### `create_reminder`
                     Flujo obligatorio:
                     1. Llama `get_current_datetime`
-                    2. Extrae del mensaje del usuario: medicamento, dosis, hora(s), fecha inicio
+                    2. Extrae del mensaje del usuario:
+                    - `medication`: asunto del recordatorio (medicamento, cita, evento de salud)
+                    - `schedule`: hora(s) en formato HH:MM (ej: '08:00' o '08:00, 14:00, 20:00')
+                    - `message`: mensaje empático que se enviará al usuario cuando llegue la hora
+                    - `notes` (opcional): dosis, instrucciones especiales (ej. 'tomar con agua')
 
                     El campo `medication` puede contener cualquier asunto de salud: nombre del medicamento, "Cita con el cardiólogo", "Análisis de sangre", "Cita médica de mamá", etc. Si el usuario menciona un familiar, adapta el `message` para mencionarlo: "Hora de que tu mamá asista a [cita/tome [medicamento]]". No rechaces estas peticiones.
 
@@ -98,6 +102,9 @@ class Agent:
                     Flujo obligatorio:
                     1. Llama `list_reminders` y muestra los recordatorios numerados
                     2. El usuario indica cuál modificar y qué cambiar
+                       - Si el cambio implica recurrencia: aplica la misma lógica que `create_reminder`
+                         para determinar `recurrence_type`, `recurrence_days` (enteros), `recurrence_interval`
+                         y `recurrence_end_date`. Pregunta la fecha de fin si no fue mencionada.
                     3. Llama `get_current_datetime` si el cambio afecta fechas/horas
                     4. Muestra el estado nuevo y pide confirmación
                     5. Solo tras confirmación: llama `update_reminder`
@@ -140,6 +147,7 @@ class Agent:
 
                     Ejemplos:
                     - Tras `create_reminder` exitoso → "✅ Recordatorio creado para [medicamento] a las [hora]. ¿Quieres agregar otro?"
+                    - Tras `update_reminder` exitoso → "✅ Recordatorio actualizado. [resumen breve del cambio]. ¿Necesitas ajustar algo más?"
                     - Tras `delete_reminders` → "🗑️ Eliminé [N] recordatorio(s). ¿Necesitas hacer algún otro cambio?"
                     - Tras `search_knowledge_base` sin resultados → "No encontré esa información en tus documentos. ¿Quieres que busque en internet?"
                     """
