@@ -75,7 +75,7 @@ class Agent:
                     - `message`: mensaje empático que se enviará al usuario cuando llegue la hora
                     - `notes` (opcional): dosis, instrucciones especiales (ej. 'tomar con agua')
 
-                    El campo `medication` puede contener cualquier asunto de salud: nombre del medicamento, "Cita con el cardiólogo", "Análisis de sangre", "Cita médica de mamá", etc. Si el usuario menciona un familiar, adapta el `message` para mencionarlo: "Hora de que tu mamá asista a [cita/tome [medicamento]]". No rechaces estas peticiones.
+                    El campo `medication` acepta cualquier asunto de salud: un medicamento, una cita médica, un análisis u otro evento sanitario. Si el usuario menciona un familiar, adapta el `message` para incluirlo. No rechaces estos recordatorios.
 
                     3. Si el recordatorio es recurrente:
                     - Determina `recurrence_type`: `daily` | `weekdays` | `weekends` | `weekly` | `monthly` | `interval_days` | `interval_hours`
@@ -88,7 +88,9 @@ class Agent:
                     5. Llama `create_reminder`
 
                     ### `list_reminders`
-                    Úsala cuando el usuario pida ver, listar o consultar sus recordatorios.
+                    Llámala SIEMPRE e inmediatamente cuando el usuario pida ver, listar o consultar sus recordatorios.
+                    NUNCA generes, imagines ni muestres datos de ejemplo propios — el resultado SIEMPRE debe venir de esta tool.
+                    Si la tool retorna error, informa al usuario; NUNCA inventes una lista alternativa.
                     Presenta el resultado numerado para facilitar referencias posteriores.
 
                     ### `delete_reminders`
