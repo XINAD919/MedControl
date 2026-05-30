@@ -148,6 +148,7 @@ async def _update_user_reminder(
     user_id: Optional[str] = None,
     medication: Optional[str] = None,
     schedule: Optional[str] = None,
+    scheduled_at: Optional[str] = None,
     message: Optional[str] = None,
     notes: Optional[str] = None,
     recurrence_type: Optional[str] = None,
@@ -160,6 +161,8 @@ async def _update_user_reminder(
         updates["medication"] = medication
     if schedule:
         updates["schedule"] = schedule
+    if scheduled_at:
+        updates["scheduled_at"] = scheduled_at
     if message:
         updates["message"] = message
     if notes:
@@ -175,7 +178,6 @@ async def _update_user_reminder(
         updates["recurrence_end_date"] = recurrence_end_date
     if not updates:
         return
-
     from core.supabase_client import create_temp_client
     client = await create_temp_client()
     try:
@@ -517,13 +519,35 @@ def update_reminder(
     if not reminder_id:
         return "Error: reminder_id no proporcionado. No se puede actualizar el recordatorio."
 
+    scheduled_at: Optional[str] = None
+    if schedule:
+        try:
+            _UTC = ZoneInfo("UTC")
+            now = datetime.now(_TZ)
+            t = datetime.strptime(schedule.strip(), "%H:%M")
+            target = now.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0, tzinfo=_TZ)
+            if target <= now:
+                target += timedelta(days=1)
+            scheduled_at = target.astimezone(_UTC).replace(tzinfo=None).isoformat()
+        except ValueError:
+            return f"Error: formato de horario inválido '{schedule}'. Se esperaba HH:MM."
+
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(
                 asyncio.run,
                 _update_user_reminder(
-                    reminder_id, user_id, medication, schedule, message, notes,
-                    recurrence_type, recurrence_days, recurrence_interval, recurrence_end_date,
+                    reminder_id=reminder_id,
+                    user_id=user_id,
+                    medication=medication,
+                    schedule=schedule,
+                    scheduled_at=scheduled_at,
+                    message=message,
+                    notes=notes,
+                    recurrence_type=recurrence_type,
+                    recurrence_days=recurrence_days,
+                    recurrence_interval=recurrence_interval,
+                    recurrence_end_date=recurrence_end_date,
                 ),
             ).result(timeout=10)
     except Exception as e:
