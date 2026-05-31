@@ -32,7 +32,7 @@ export default async function RootLayout({
       lang="es"
       className={`${roboto.variable} h-full antialiased`}
     >
-      <body className="min-h-dvh flex flex-row">
+      <body className="h-dvh overflow-hidden flex flex-row">
         <Providers>
           <ClientLayout>{children}</ClientLayout>
         </Providers>

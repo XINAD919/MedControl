@@ -61,7 +61,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <SideBar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         </>
       )}
-      <div className="flex-1 min-w-0 bg-blue-100">{children}</div>
+      <div className="flex-1 min-w-0 bg-blue-100 overflow-y-auto">{children}</div>
     </>
   );
 }

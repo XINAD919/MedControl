@@ -19,6 +19,8 @@ import {
   type DelayedReminder,
 } from '../lib/api'
 import type { AdherenceAnalysis, FamilyMember, FamilyInvitation, InvitationStatus, LinkedPatient, MedicationSummary } from '../lib/types'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type TabId = 'dashboard' | 'familiares'
 
@@ -464,7 +466,9 @@ export default function FamilyPage() {
                       </div>
 
                       {/* Comentario LLM */}
-                      <p className="text-sm text-gray-600 leading-relaxed">{adherence.llm_comment}</p>
+                      <div className="md-prose text-sm text-gray-600 leading-relaxed">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{adherence.llm_comment}</ReactMarkdown>
+                      </div>
 
                       <p className="text-xs text-gray-300">
                         Análisis de {adherence.period_days} días · {new Date(adherence.created_at).toLocaleDateString('es-ES')}
