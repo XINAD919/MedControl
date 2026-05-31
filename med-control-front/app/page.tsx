@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { fetchReminders, markReminderTaken, toggleReminderPrivacy } from './lib/api'
 import type { Reminder, ReminderStatus } from './lib/types'
@@ -38,6 +38,16 @@ function localTodayKey(): string {
 
 function formatTime(iso: string) {
   return toUtcDate(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+function formatDate(dateStr: string) {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('es-ES', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 
 function isOverdue(r: Reminder): boolean {
@@ -168,6 +178,16 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [session])
 
+  const groupedUpcoming = useMemo(() => {
+    const map: Record<string, Reminder[]> = {}
+    for (const r of upcomingReminders) {
+      const date = localDateKey(r.scheduled_at)
+      if (!map[date]) map[date] = []
+      map[date].push(r)
+    }
+    return Object.keys(map).sort().map(date => ({ date, reminders: map[date] }))
+  }, [upcomingReminders])
+
   function handleTaken(reminderId: string) {
     if (!session) return
     markReminderTaken(session, reminderId).then(() => {
@@ -234,15 +254,24 @@ export default function DashboardPage() {
       </section>
 
       {/* Próximos recordatorios */}
-      {!loading && upcomingReminders.length > 0 && (
+      {!loading && groupedUpcoming.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-4">
             <Clock size={16} className="text-blue-500" />
             <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Próximos</h2>
           </div>
-          <div className="flex flex-col gap-3">
-            {upcomingReminders.map(r => (
-              <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} onPrivacyToggle={handlePrivacyToggle} />
+          <div className="flex flex-col gap-6">
+            {groupedUpcoming.map(({ date, reminders }) => (
+              <div key={date}>
+                <h3 className="text-xs font-semibold text-gray-400 tracking-wider mb-2 capitalize">
+                  {formatDate(date)}
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {reminders.map(r => (
+                    <ReminderCard key={r.reminder_id} reminder={r} onTaken={handleTaken} onPrivacyToggle={handlePrivacyToggle} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </section>

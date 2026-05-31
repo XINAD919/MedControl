@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from core import db
 from deps import CurrentUser, get_current_user, get_or_create_agent, session_store
 
 router = APIRouter()
@@ -22,8 +23,12 @@ async def create_session(
 
 
 @router.delete("/{session_id}")
-def delete_session(session_id: str):
-    if session_id not in session_store:
-        raise HTTPException(status_code=404, detail="Session not found")
-    del session_store[session_id]
+async def delete_session(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    if session_id != str(current_user.user_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    session_store.pop(session_id, None)
+    await db.clear_session_messages(session_id)
     return {"session_id": session_id, "deleted": True}

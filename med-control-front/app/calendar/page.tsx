@@ -53,6 +53,10 @@ function formatTime(iso: string) {
   return toUtcDate(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
+function formatShortDate(iso: string) {
+  return toUtcDate(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 function localDateKey(iso: string): string {
   // Returns YYYY-MM-DD in the user's local timezone
   const d = toUtcDate(iso)
@@ -179,13 +183,16 @@ export default function CalendarPage() {
                       key={r.reminder_id}
                       className={`bg-white rounded-xl p-4 border shadow-sm flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${overdue ? 'border-amber-200' : 'border-blue-50'}`}
                     >
-                      <div className="shrink-0 flex flex-col items-center min-w-[48px]">
+                      <div className="shrink-0 flex flex-col items-center min-w-[56px]">
                         {overdue
                           ? <AlertTriangle size={12} className="text-amber-400 mb-0.5" />
                           : <Clock size={12} className="text-gray-300 mb-0.5" />
                         }
                         <span className={`text-xs font-mono font-medium ${overdue ? 'text-amber-500' : 'text-gray-500'}`}>
                           {formatTime(r.scheduled_at)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 mt-0.5 text-center leading-tight capitalize">
+                          {formatShortDate(r.scheduled_at)}
                         </span>
                       </div>
                       <div className="w-px h-10 bg-gray-100 shrink-0" />

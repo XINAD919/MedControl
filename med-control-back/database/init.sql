@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   notes TEXT,
 
   -- Timing
-  scheduled_at TIMESTAMP NOT NULL,
+  scheduled_at TIMESTAMPTZ NOT NULL,
 
   -- Estado agregado (se sincroniza con reminder_notifications)
   status reminder_status DEFAULT 'scheduled',
@@ -173,13 +173,13 @@ CREATE TABLE IF NOT EXISTS reminders (
   recurrence_type     VARCHAR(50),
   recurrence_days     TEXT,
   recurrence_interval INTEGER   DEFAULT 1,
-  recurrence_end_date TIMESTAMP,
+  recurrence_end_date TIMESTAMPTZ,
 
   -- Metadata
   metadata JSONB DEFAULT '{}'::jsonb,
 
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
 
   CONSTRAINT reminders_reminder_id_key UNIQUE (reminder_id)
 );
@@ -207,14 +207,14 @@ CREATE TABLE IF NOT EXISTS reminder_notifications (
   notify_id   VARCHAR(500) NOT NULL,
 
   status        reminder_status DEFAULT 'scheduled',
-  fired_at      TIMESTAMP,
-  completed_at  TIMESTAMP,
-  failed_at     TIMESTAMP,
+  fired_at      TIMESTAMPTZ,
+  completed_at  TIMESTAMPTZ,
+  failed_at     TIMESTAMPTZ,
   error_message TEXT,
 
   metadata   JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
 
   UNIQUE (reminder_id, channel)
 );

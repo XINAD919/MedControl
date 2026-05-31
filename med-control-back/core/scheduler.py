@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import structlog
@@ -24,7 +24,7 @@ def _generate_next_reminder_id(user_id: str, next_dt: datetime) -> str:
 
 async def check_due_reminders() -> None:
     from core.supabase_client import create_temp_client
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     lookahead = now + timedelta(seconds=_LOOKAHEAD_SECONDS)
     client = await create_temp_client()
     try:
@@ -70,8 +70,8 @@ async def check_due_reminders() -> None:
 
 
 async def _process_group(reminder: dict, notifs: list[dict], webhook_url: str) -> None:
-    scheduled_at = datetime.fromisoformat(reminder["scheduled_at"].replace("Z", ""))
-    wait = (scheduled_at - datetime.utcnow()).total_seconds()
+    scheduled_at = datetime.fromisoformat(reminder["scheduled_at"].replace("Z", "+00:00"))
+    wait = (scheduled_at - datetime.now(timezone.utc)).total_seconds()
     if wait > 0:
         await asyncio.sleep(wait)
 
@@ -115,7 +115,7 @@ async def _process_group(reminder: dict, notifs: list[dict], webhook_url: str) -
 async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
     end_date_str = reminder.get("recurrence_end_date")
     end_date = (
-        datetime.fromisoformat(end_date_str.replace("Z", ""))
+        datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
         if end_date_str else None
     )
 
@@ -126,7 +126,7 @@ async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
         except Exception:
             pass
 
-    current_dt = datetime.fromisoformat(reminder["scheduled_at"].replace("Z", ""))
+    current_dt = datetime.fromisoformat(reminder["scheduled_at"].replace("Z", "+00:00"))
     next_dt = calculate_next_occurrence(
         current=current_dt,
         recurrence_type=reminder["recurrence_type"],
@@ -198,7 +198,7 @@ _MISSED_DOSE_WINDOW_MINUTES = 20
 async def check_missed_doses() -> None:
     """Detecta dosis no tomadas 20 min después de su hora y alerta a los caregivers."""
     from core.supabase_client import create_temp_client
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=_MISSED_DOSE_WINDOW_MINUTES)
 
     client = await create_temp_client()

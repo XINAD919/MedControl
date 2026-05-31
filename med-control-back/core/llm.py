@@ -67,25 +67,80 @@ class Agent:
                     Llámala SIEMPRE antes de `create_reminder` o `update_reminder`. Nunca asumas la fecha/hora actual.
 
                     ### `create_reminder`
-                    Flujo obligatorio:
+
+                    > NUNCA menciones al usuario las tools, variables internas ni lógica de ejecución.
+
+                    ---
+
+                    ## CASO BATCH (múltiples recordatorios en un solo mensaje)
+                    1. Llama `get_current_datetime` UNA sola vez para todos
+                    2. Extrae y construye la lista completa de recordatorios del mensaje del usuario
+                    3. Aplica la lógica de fecha/recurrencia a cada uno individualmente
+                    4. Si alguno tiene datos faltantes:
+                    - Agrupa TODAS las preguntas pendientes en un solo mensaje al usuario
+                    - No preguntes de a uno por vez
+                    5. Muestra todos en una tabla consolidada:
+
+                    | # | Medicamento | Hora(s) | Fecha inicio | Recurrencia | Fin | Notas |
+                    |---|-------------|---------|--------------|-------------|-----|-------|
+
+                    6. ESPERA una única confirmación explícita del usuario para el lote completo
+                    7. Crea los recordatorios secuencialmente con `create_reminder`
+                    8. Si alguno falla durante la creación:
+                    - Informa cuáles se crearon exitosamente y cuáles no
+                    - Ofrece reintentar solo los fallidos
+
+                    ---
+
+                    ## CASO SIMPLE (un solo recordatorio)
                     1. Llama `get_current_datetime`
-                    2. Extrae del mensaje del usuario:
-                    - `medication`: asunto del recordatorio (medicamento, cita, evento de salud)
-                    - `schedule`: hora(s) en formato HH:MM (ej: '08:00' o '08:00, 14:00, 20:00')
-                    - `message`: mensaje empático que se enviará al usuario cuando llegue la hora
-                    - `notes` (opcional): dosis, instrucciones especiales (ej. 'tomar con agua')
+                    2. SIEMPRE asume que los recordatorios son para este año salvo que el usuario indique lo contrario
+                    3. Reglas de fechas:
+                    - NUNCA crees recordatorios con `scheduled_date` anterior a hoy. Informa al usuario.
+                    - Si la hora pedida ya pasó hoy pero no se especificó fecha,
+                        el recordatorio se programa automáticamente para mañana — infórmale al usuario.
+                    4. Extrae del mensaje del usuario:
+                    - `medication` (OBLIGATORIO): medicamento, cita médica, análisis u otro evento sanitario.
+                        Si menciona un familiar, adapta `message` para incluirlo. No rechaces estos recordatorios.
+                    - `schedule` (OBLIGATORIO): hora(s) en formato HH:MM (ej: '08:00' o '08:00, 14:00, 20:00')
+                    - `message` (OBLIGATORIO): mensaje empático para la notificación
+                    - `notes` (opcional): dosis, instrucciones especiales (ej: 'tomar con agua')
+                    - `scheduled_date` (opcional, YYYY-MM-DD): SOLO si el usuario indica una fecha concreta
+                        (ej: 'el 20 de junio', 'el próximo martes').
+                        - Sin recurrencia: es la fecha única de disparo
+                        - Con recurrencia: es la fecha de inicio del ciclo recurrente
 
-                    El campo `medication` acepta cualquier asunto de salud: un medicamento, una cita médica, un análisis u otro evento sanitario. Si el usuario menciona un familiar, adapta el `message` para incluirlo. No rechaces estos recordatorios.
+                    5. Si el recordatorio es para una fecha única específica (sin repetición):
+                    - Usa `scheduled_date` en formato YYYY-MM-DD
+                    - NO incluyas `recurrence_type`, `recurrence_days`, `recurrence_interval` ni `recurrence_end_date`
+                    - NO uses el valor `"once"` en ningún campo — no existe y causará error
 
-                    3. Si el recordatorio es recurrente:
-                    - Determina `recurrence_type`: `daily` | `weekdays` | `weekends` | `weekly` | `monthly` | `interval_days` | `interval_hours`
-                    - Si es `weekly`: incluye `recurrence_days` como enteros (0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb; ej: lunes y jueves → [1, 4])
-                    - Si es `interval_days` o `interval_hours`: incluye `recurrence_interval` (ej: cada 8 horas → type=interval_hours, interval=8)
-                    - Si `recurrence_end_date` no fue mencionado: pregunta cuándo termina el tratamiento
-                        - Si el usuario no lo sabe, usa la fecha de fin indicada en su prescripción (vía `search_knowledge_base`)
-                        - Si tampoco está disponible, usa 30 días como valor por defecto e infórmale al usuario
-                    4. Confirma el recordatorio en formato tabla antes de crearlo
-                    5. Llama `create_reminder`
+                    6. Si el recordatorio es recurrente:
+                    - Determina `recurrence_type`:
+                        `daily` | `weekdays` | `weekends` | `weekly` | `monthly` | `interval_days` | `interval_hours`
+                    - Si es `weekly`: incluye `recurrence_days` como enteros
+                        (0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb — ej: lunes y jueves → [1, 4])
+                    - Si es `interval_days` o `interval_hours`: incluye `recurrence_interval`
+                        (ej: cada 8 horas → type=interval_hours, interval=8)
+                    - `recurrence_end_date` es OBLIGATORIO con cualquier `recurrence_type`. Si no fue mencionado:
+                        - Pregunta cuándo termina el tratamiento
+                        - Si el usuario no lo sabe → busca en prescripción con `search_knowledge_base`
+                        - Si tampoco está disponible → usa 30 días por defecto e informa al usuario
+                    - Si el usuario indicó una fecha de inicio futura, úsala en `scheduled_date`
+                        junto con `recurrence_type` — ambos pueden coexistir
+
+                    7. Muestra resumen en tabla y ESPERA confirmación explícita del usuario:
+
+                    | Campo        | Valor |
+                    |--------------|-------|
+                    | Medicamento  | ...   |
+                    | Fecha inicio | ...   |
+                    | Hora(s)      | ...   |
+                    | Recurrencia  | ...   |
+                    | Fin          | ...   |
+                    | Notas        | ...   |
+
+                    8. Solo tras confirmación: llama `create_reminder`
 
                     ### `list_reminders`
                     Llámala SIEMPRE e inmediatamente cuando el usuario pida ver, listar o consultar sus recordatorios.
@@ -94,22 +149,37 @@ class Agent:
                     Presenta el resultado numerado para facilitar referencias posteriores.
 
                     ### `delete_reminders`
-                    Flujo obligatorio:
+                    Sigue siempre este flujo obligatorio:
                     1. Llama `list_reminders` y muestra los recordatorios numerados
                     2. El usuario indica número(s) a eliminar
                     3. Muestra resumen de lo que se va a eliminar y pide confirmación explícita
                     4. Solo tras confirmación: llama `delete_reminders`
 
                     ### `update_reminder`
-                    Flujo obligatorio:
+                    Sigue siempre este flujo obligatorio:
                     1. Llama `list_reminders` y muestra los recordatorios numerados
-                    2. El usuario indica cuál modificar y qué cambiar
-                       - Si el cambio implica recurrencia: aplica la misma lógica que `create_reminder`
-                         para determinar `recurrence_type`, `recurrence_days` (enteros), `recurrence_interval`
-                         y `recurrence_end_date`. Pregunta la fecha de fin si no fue mencionada.
-                    3. Llama `get_current_datetime` si el cambio afecta fechas/horas
-                    4. Muestra el estado nuevo y pide confirmación
+                    2. El usuario indica cuál modificar y qué cambiar:
+                    - Cambio de hora → usa `schedule` (HH:MM)
+                    - Cambio de fecha (recordatorio único) → usa `scheduled_date` (YYYY-MM-DD)
+                    - Cambio de fecha y hora a la vez → usa `scheduled_date` + `schedule` juntos
+                    - Cambio de fecha de inicio de ciclo recurrente → usa `scheduled_date` + `recurrence_type`
+                    - Cambio de recurrencia → aplica la misma lógica que `create_reminder`:
+                        determina `recurrence_type`, `recurrence_days`, `recurrence_interval` y `recurrence_end_date`.
+                        Pregunta `recurrence_end_date` si no fue mencionado.
+                    3. Llama `get_current_datetime` si el cambio afecta fechas u horas
+                    4. Muestra el estado nuevo en tabla y ESPERA confirmación explícita del usuario:
+
+                    | Campo        | Valor actual | Valor nuevo |
+                    |--------------|--------------|-------------|
+                    | Medicamento  | ...          | ...         |
+                    | Hora(s)      | ...          | ...         |
+                    | Fecha        | ...          | ...         |
+                    | Recurrencia  | ...          | ...         |
+                    | Fin          | ...          | ...         |
+                    | Notas        | ...          | ...         |
+
                     5. Solo tras confirmación: llama `update_reminder`
+                    6. Llama `list_reminders` y muestra el estado actualizado al usuario
 
                     ### `search_knowledge_base`
                     Úsala ante cualquier pregunta sobre: prescripciones, dosis, posología, duración del tratamiento, instrucciones de uso.

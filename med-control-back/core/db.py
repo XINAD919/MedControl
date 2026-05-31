@@ -207,7 +207,6 @@ async def clear_session_messages(session_id: str) -> None:
     if sess and sess.data:
         await client.table("messages").delete().eq("session_id", sess.data["id"]).execute()
 
-
 # ============================================================================
 # Recordatorios
 # ============================================================================

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSession } from 'next-auth/react'
-import { connectChatSocket, fetchDocument, uploadDocument } from '../lib/api'
+import { connectChatSocket, deleteChatHistory, fetchDocument, uploadDocument } from '../lib/api'
 import type { ChatMessage, UploadStatus } from '../lib/types'
 import { Send, Bot, User, AlertCircle, Trash2, Paperclip, X } from 'lucide-react'
 
@@ -63,6 +63,8 @@ export default function ChatPage() {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [pendingDocId, setPendingDocId] = useState<string | null>(null)
+  const [confirmingClear, setConfirmingClear] = useState(false)
+  const [clearError, setClearError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -128,6 +130,20 @@ export default function ChatPage() {
     )
   }
   if (!session) return null
+
+  const handleClearConfirm = async () => {
+    try {
+      await deleteChatHistory(session).then(() => {
+        setMessages([])
+        localStorage.removeItem(STORAGE_KEY)
+      })
+    } catch {
+      setClearError(true)
+    } finally {
+      setConfirmingClear(false)
+      setTimeout(() => setClearError(false), 2000)
+    }
+  }
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -220,14 +236,35 @@ export default function ChatPage() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           {messages.length > 0 && !isStreaming && (
-            <button
-              type="button"
-              onClick={() => { setMessages([]); localStorage.removeItem(STORAGE_KEY) }}
-              title="Limpiar conversación"
-              className="text-gray-300 hover:text-red-400 transition-colors"
-            >
-              <Trash2 size={15} />
-            </button>
+            confirmingClear ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400">¿Eliminar historial?</span>
+                <button
+                  type="button"
+                  onClick={handleClearConfirm}
+                  className="text-red-400 hover:text-red-500 font-medium transition-colors"
+                >
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(false)}
+                  className="text-gray-300 hover:text-gray-500 transition-colors"
+                >
+                  Cancelar
+                </button>
+                {clearError && <span className="text-red-400">Error al limpiar historial</span>}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingClear(true)}
+                title="Limpiar conversación"
+                className="text-gray-300 hover:text-red-400 transition-colors"
+              >
+                <Trash2 size={15} />
+              </button>
+            )
           )}
           <div className={`size-2 rounded-full ${isStreaming ? 'bg-blue-400 animate-pulse' : 'bg-green-400'}`} />
         </div>
@@ -252,7 +289,7 @@ export default function ChatPage() {
                   key={suggestion}
                   onClick={() => { setInput(suggestion); textareaRef.current?.focus() }}
                   className="text-xs text-blue-500 border border-blue-100 bg-white hover:bg-blue-50 rounded-full px-4 py-1.5 transition-colors"
-                type="button"
+                  type="button"
                 >
                   {suggestion}
                 </button>

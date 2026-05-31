@@ -325,3 +325,13 @@ export function connectChatSocket(
     ws.close()
   }
 }
+
+// ── Clear chat History ────────────────────────────────────────────────────────────
+
+export function deleteChatHistory(session: Session): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/api/sessions/${session.user.id}`,
+    session.accessToken,
+    { method: 'DELETE' },
+  )
+}
