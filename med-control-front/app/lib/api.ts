@@ -107,6 +107,34 @@ export function toggleChannelReminders(
   )
 }
 
+export function sendVerification(
+  session: Session,
+  channel: ChannelType,
+): Promise<{ status: string; expires_in_seconds: number }> {
+  assertCanWrite(session)
+  return apiFetch<{ status: string; expires_in_seconds: number }>(
+    `/api/users/${session.user.id}/channels/${channel}/send-verification`,
+    session.accessToken,
+    { method: 'POST' },
+  )
+}
+
+export function verifyEmailCode(
+  session: Session,
+  code: string,
+): Promise<{ status: string }> {
+  assertCanWrite(session)
+  return apiFetch<{ status: string }>(
+    `/api/users/${session.user.id}/channels/email/verify`,
+    session.accessToken,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    },
+  )
+}
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 
 export function fetchNotifications(
