@@ -1,0 +1,185 @@
+{
+  "name": "MedAI – WAHA Poll Vote Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "waha-incoming",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e5f6a7b8-0005-4000-8000-000000000005",
+      "name": "Webhook Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "waha-incoming-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "auth-waha",
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.WAHA_WEBHOOK_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "is-poll-vote",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "poll.vote",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "not-from-me",
+              "leftValue": "={{ $json.body.payload.vote.fromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "voted-si",
+              "leftValue": "={{ JSON.stringify($json.body.payload.vote.selectedOptions) }}",
+              "rightValue": "Sí",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "name": "filter.operator.contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f6a7b8c9-0006-4000-8000-000000000006",
+      "name": "Check Auth + Poll Sí",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "notes": "Valida: 1) secret del header, 2) evento es poll.vote, 3) no es voto propio, 4) usuario eligió 'Sí, soy yo'. Ajustar paths si tu versión de WAHA usa estructura diferente."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-notify-id",
+              "name": "notify_id",
+              "value": "={{ $json.body.payload.vote.from.replace('@c.us', '') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7b8c9d0-0007-4000-8000-000000000007",
+      "name": "Extract Phone",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 200],
+      "notes": "Extrae el número de teléfono del votante (sin el sufijo @c.us)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.24.66.234:8080/webhooks/channel-verify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $env.WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ notify_id: $json.notify_id }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "b8c9d0e1-0008-4000-8000-000000000008",
+      "name": "Notify Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 200],
+      "notes": "El backend busca la verificación pendiente por notify_id y valida expiración. No se envía código — el voto en la encuesta prueba posesión del teléfono."
+    }
+  ],
+  "connections": {
+    "Webhook Entry": {
+      "main": [
+        [
+          {
+            "node": "Check Auth + Poll Sí",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth + Poll Sí": {
+      "main": [
+        [
+          {
+            "node": "Extract Phone",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Extract Phone": {
+      "main": [
+        [
+          {
+            "node": "Notify Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0c4f7c70fc44a45c19fc253fba6ed33ecb3324e2ee86a6541e4601f5b5d9feb8"
+  },
+  "tags": [
+    {
+      "name": "WhatsApp"
+    },
+    {
+      "name": "Verification"
+    }
+  ]
+}

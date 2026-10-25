@@ -9,13 +9,16 @@ El registro de canales (Telegram, email, etc.) se gestiona desde
 el frontend a través de api/routes/channels.py.
 """
 
+import hmac
 import logging
 import os
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
-from core.db import update_reminder_status
+from core.db import get_channel_by_notify_id, set_channel_metadata, set_channel_verified, update_reminder_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,5 +95,56 @@ async def n8n_webhook(
     else:
         logger.warning(f"Unknown event type: {event}")
         raise HTTPException(400, f"Unknown event type: {event}")
+
+
+class ChannelVerifyPayload(BaseModel):
+    notify_id: str
+    code: Optional[str] = None  # No requerido en flujo por poll; sí en flujo por texto
+
+
+@router.post("/webhooks/channel-verify")
+async def channel_verify_webhook(
+    payload: ChannelVerifyPayload,
+    x_api_key: str | None = Header(None),
+):
+    """
+    Recibe confirmación de verificación de WhatsApp desde n8n.
+    - Flujo por poll: solo envía notify_id (el voto en la encuesta prueba posesión del teléfono)
+    - Flujo por texto: envía notify_id + code para validación explícita
+    """
+    verify_api_key(x_api_key)
+
+    row = await get_channel_by_notify_id("whatsapp", payload.notify_id)
+    if not row:
+        raise HTTPException(404, "Canal no encontrado o ya verificado")
+
+    user_id = row["user_id"]
+    meta = row.get("metadata") or {}
+    stored_code = meta.get("verification_code")
+    expires_at = meta.get("verification_expires_at")
+    attempts = meta.get("verification_attempts", 0)
+
+    if not expires_at:
+        raise HTTPException(400, "No hay verificación pendiente")
+
+    if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at):
+        raise HTTPException(400, "Código expirado")
+
+    if payload.code is not None:
+        # Flujo por texto: validar código explícitamente
+        if not stored_code:
+            raise HTTPException(400, "No hay código de verificación pendiente")
+        if attempts >= 5:
+            raise HTTPException(429, "Demasiados intentos")
+        if not hmac.compare_digest(stored_code, payload.code.strip()):
+            await set_channel_metadata(user_id, "whatsapp", {
+                **meta,
+                "verification_attempts": attempts + 1,
+            })
+            raise HTTPException(400, "Código incorrecto")
+
+    await set_channel_verified(user_id, "whatsapp")
+    logger.info(f"User {user_id} verified whatsapp channel {payload.notify_id}")
+    return {"status": "verified", "channel": "whatsapp", "user_id": user_id}
 
 

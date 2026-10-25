@@ -92,6 +92,58 @@ async def upsert_user_channel(
     ).execute()
 
 
+async def get_channel_row(user_id: str, channel: str) -> Optional[dict]:
+    client = get_supabase()
+    res = await (
+        client.table("user_channels")
+        .select("channel, notify_id, verified, is_primary, receive_reminders, metadata")
+        .eq("user_id", user_id)
+        .eq("channel", channel)
+        .maybe_single()
+        .execute()
+    )
+    return res.data if res else None
+
+
+async def get_channel_by_notify_id(channel: str, notify_id: str) -> Optional[dict]:
+    """Busca un canal sin verificar por número/ID de contacto (para el webhook de WhatsApp)."""
+    client = get_supabase()
+    res = await (
+        client.table("user_channels")
+        .select("user_id, notify_id, verified, metadata")
+        .eq("channel", channel)
+        .eq("notify_id", notify_id)
+        .eq("verified", False)
+        .maybe_single()
+        .execute()
+    )
+    return res.data if res else None
+
+
+async def set_channel_metadata(user_id: str, channel: str, metadata: dict) -> None:
+    """Actualiza solo el campo metadata sin tocar verified, is_primary, receive_reminders."""
+    client = get_supabase()
+    await (
+        client.table("user_channels")
+        .update({"metadata": metadata, "updated_at": "now()"})
+        .eq("user_id", user_id)
+        .eq("channel", channel)
+        .execute()
+    )
+
+
+async def set_channel_verified(user_id: str, channel: str) -> None:
+    """Marca el canal como verificado y limpia el metadata de verificación."""
+    client = get_supabase()
+    await (
+        client.table("user_channels")
+        .update({"verified": True, "metadata": {}, "updated_at": "now()"})
+        .eq("user_id", user_id)
+        .eq("channel", channel)
+        .execute()
+    )
+
+
 async def get_notification_channels(user_id: str) -> list[dict]:
     """Canales verificados con receive_reminders=True."""
     client = get_supabase()

@@ -157,6 +157,7 @@ async def _insert_all_reminders_local(tasks: list[dict]) -> None:
                         "channel": ch["channel"],
                         "notify_id": ch["notify_id"],
                         "status": "scheduled",
+                        "metadata": ch.get("metadata") or {},
                     }
                 )
 
@@ -367,6 +368,7 @@ def create_reminder(
         {
             "channel": ch["channel"],
             "notify_id": ch["notify_id"],
+            "metadata": ch.get("metadata") or {},
             "discord_webhook_url": (
                 ch.get("metadata", {}).get("webhook_url", "")
                 if ch["channel"] == "discord"

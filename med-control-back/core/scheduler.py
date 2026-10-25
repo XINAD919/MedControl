@@ -165,6 +165,7 @@ async def _schedule_next(reminder: dict, notifs: list[dict]) -> None:
             "channel": notif["channel"],
             "notify_id": notif["notify_id"],
             "status": "scheduled",
+            "metadata": notif.get("metadata") or {},
         }
         for notif in notifs
     ]

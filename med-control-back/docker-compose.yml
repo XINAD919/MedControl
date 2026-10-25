@@ -745,7 +745,13 @@ services:
  
       # Hardening
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+
+      # Variables expuestas explícitamente a los workflows vía $env.*
+      # Solo incluir lo que los workflows de verificación necesitan leer
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      WAHA_API_KEY: ${WHATSAPP_API_KEY}
+      WAHA_WEBHOOK_SECRET: ${WAHA_WEBHOOK_SECRET}
     ports:
       - "5678:5678"
     volumes:
