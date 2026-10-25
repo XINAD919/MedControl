@@ -209,7 +209,6 @@ class Agent:
                     - Confirmaciones previas a acciones irreversibles (eliminar): siempre en lista clara
 
                    ---
-
                     ## 6. COMPORTAMIENTO POST-TOOL
 
                     Después de ejecutar cualquier tool, SIEMPRE debes:
